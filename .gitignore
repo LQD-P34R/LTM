@@ -1,0 +1,13 @@
+# Maven / Java
+**/target/
+*.class
+*.log
+# IDE
+.idea/
+.vscode/*.log
+*.iml
+# Runtime artifacts
+*.db
+*.db-journal
+*.sqlite
+.DS_Store
