@@ -97,9 +97,10 @@ public final class ChatBubbleRenderer extends JPanel {
         textArea.setEditable(false);
         textArea.setFocusable(false);
         textArea.setLineWrap(true);
-        textArea.setWrapStyleWord(true);
+        textArea.setWrapStyleWord(false);
         // Width cứng để lineWrap hoạt động đúng trong BoxLayout
-        textArea.setPreferredSize(new Dimension(260, Short.MAX_VALUE));
+        textArea.setMaximumSize(new Dimension(380, Integer.MAX_VALUE));
+        bubble.setMaximumSize(new Dimension(400, Integer.MAX_VALUE));
         bubble.add(textArea, BorderLayout.CENTER);
 
         // ── Footer: thời gian (+ ✓✓ cho tin của mình) ────────────
