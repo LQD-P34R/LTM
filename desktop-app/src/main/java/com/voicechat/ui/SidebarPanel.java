@@ -5,6 +5,7 @@ import com.voicechat.common.model.RoomInfo;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.border.MatteBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.*;
@@ -13,16 +14,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * TV3 – Bước 2: Thanh bên hiển thị danh sách peer (chat 1-1) và room (nhóm).
- * <p>Màu nền tối tương phản với vùng nội dung sáng bên phải.
- * Giao tiếp với ChatFrame qua {@link SelectionListener}.</p>
- *
- * <p>Cách dùng từ ChatFrame:</p>
- * <pre>
- *   SidebarPanel sidebar = new SidebarPanel(myListener);
- *   sidebar.setPeers(listOfPeerInfo);
- *   sidebar.setRooms(listOfRoomInfo);
- * </pre>
+ * VoiceLink SidebarPanel: Thanh bên danh bạ và nhóm chat phong cách VoiceLink.
+ * <p>Chiều rộng 260px, nền trắng tinh (C_CARD_BG), viền phải mảnh 1px (C_BORDER).
+ * Các mục chat bo góc 10px, có AvatarBadge với màu pastel và chấm trạng thái Online/Offline.</p>
  */
 public final class SidebarPanel extends JPanel {
 
@@ -34,230 +28,190 @@ public final class SidebarPanel extends JPanel {
         void onCreateGroupRequested();
     }
 
-    // ── Màu sắc (dark sidebar palette) ───────────────────────────
-    private static final Color COLOR_BG             = new Color(0x1E, 0x2D, 0x48);
-    private static final Color COLOR_ITEM_NORMAL    = new Color(0x1E, 0x2D, 0x48);
-    private static final Color COLOR_ITEM_HOVER     = new Color(0x27, 0x3D, 0x60);
-    private static final Color COLOR_ITEM_SELECTED  = new Color(0x3A, 0x7B, 0xD5);
-    private static final Color COLOR_SECTION_HDR    = new Color(0x7A, 0x93, 0xB8);
-    private static final Color COLOR_TEXT_PRIMARY   = new Color(0xEC, 0xF0, 0xF1);
-    private static final Color COLOR_TEXT_SECONDARY = new Color(0x8A, 0xA3, 0xC8);
-    private static final Color COLOR_ONLINE         = new Color(0x2E, 0xCC, 0x71);
-    private static final Color COLOR_OFFLINE        = new Color(0x55, 0x6A, 0x7E);
-    private static final Color COLOR_SEARCH_BG      = new Color(0x14, 0x1F, 0x33);
-    private static final Color COLOR_DIVIDER        = new Color(0x2A, 0x3C, 0x58);
-    private static final Color COLOR_BTN_BG         = new Color(0x2D, 0x40, 0x62);
-    private static final Color COLOR_BTN_HOVER      = new Color(0x3A, 0x7B, 0xD5);
-
-    // ── Font ─────────────────────────────────────────────────────
-    private static final Font FONT_APP_TITLE = new Font("SansSerif", Font.BOLD,  15);
-    private static final Font FONT_SECTION   = new Font("SansSerif", Font.BOLD,  10);
-    private static final Font FONT_USERNAME  = new Font("SansSerif", Font.BOLD,  13);
-    private static final Font FONT_SUBTITLE  = new Font("SansSerif", Font.PLAIN, 11);
-    private static final Font FONT_SEARCH    = new Font("SansSerif", Font.PLAIN, 12);
-    private static final Font FONT_BTN       = new Font("SansSerif", Font.BOLD,  11);
-    private static final Font FONT_AVATAR    = new Font("SansSerif", Font.BOLD,  14);
-
-    // ── Palette màu avatar (chọn theo hash tên) ───────────────────
-    private static final Color[] AVATAR_COLORS = {
-        new Color(0x3A, 0x7B, 0xD5), new Color(0xE7, 0x4C, 0x3C),
-        new Color(0x2E, 0xCC, 0x71), new Color(0xF3, 0x9C, 0x12),
-        new Color(0x9B, 0x59, 0xB6), new Color(0x1A, 0xBC, 0x9C),
-        new Color(0xE9, 0x1E, 0x63), new Color(0x00, 0x96, 0x88),
-    };
-
     // ── State ─────────────────────────────────────────────────────
     private final SelectionListener listener;
     private final JPanel            peerListPanel = new JPanel();
     private final JPanel            roomListPanel = new JPanel();
-    private final JTextField        searchField   = new JTextField();
+    private final UiUtils.RoundedTextField searchField = new UiUtils.RoundedTextField("Tìm bạn bè hoặc nhóm...");
     private List<PeerInfo>          allPeers      = new ArrayList<>();
     private List<RoomInfo>          allRooms      = new ArrayList<>();
     private Object                  selectedItem  = null; // PeerInfo | RoomInfo
 
-    // ─────────────────────────────────────────────────────────────
-
     public SidebarPanel(SelectionListener listener) {
         this.listener = listener;
         setLayout(new BorderLayout());
-        setBackground(COLOR_BG);
-        setPreferredSize(new Dimension(220, 0));
+        setBackground(UiUtils.C_CARD_BG);
+        setPreferredSize(new Dimension(260, 0));
+        // Đường kẻ mảnh 1px ngăn cách cột bên phải
+        setBorder(new MatteBorder(0, 0, 0, 1, UiUtils.C_BORDER));
 
         add(buildTopBar(),         BorderLayout.NORTH);
         add(buildScrollableList(), BorderLayout.CENTER);
         add(buildBottomToolbar(),  BorderLayout.SOUTH);
     }
 
-    // ── Top bar: logo + search ────────────────────────────────────
+    // ── Top bar: Tiêu đề + Nút Tạo nhóm + Search box ──────────────
     private JPanel buildTopBar() {
         JPanel top = new JPanel();
         top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
-        top.setBackground(COLOR_BG);
+        top.setBackground(UiUtils.C_CARD_BG);
 
-        // Tiêu đề ứng dụng
-        JPanel titleBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 14, 10));
-        titleBar.setBackground(COLOR_BG);
+        // Header: Logo / Tiêu đề + Nút + tạo nhóm nhanh
+        JPanel titleBar = new JPanel(new BorderLayout());
+        titleBar.setBackground(UiUtils.C_CARD_BG);
+        titleBar.setBorder(new EmptyBorder(14, 16, 10, 16));
+
+        JPanel brandPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        brandPanel.setOpaque(false);
+
         JLabel iconLbl = new JLabel("\uD83D\uDCAC"); // 💬
-        iconLbl.setFont(new Font("SansSerif", Font.PLAIN, 18));
-        iconLbl.setForeground(COLOR_ITEM_SELECTED);
-        JLabel titleLbl = new JLabel("VoiceChat");
-        titleLbl.setFont(FONT_APP_TITLE);
-        titleLbl.setForeground(COLOR_TEXT_PRIMARY);
-        titleBar.add(iconLbl);
-        titleBar.add(titleLbl);
+        iconLbl.setFont(new Font("Segoe UI", Font.PLAIN, 18));
+        iconLbl.setForeground(UiUtils.C_PRIMARY);
+
+        JLabel titleLbl = new JLabel("Tin nhắn");
+        titleLbl.setFont(UiUtils.F_TITLE_LG);
+        titleLbl.setForeground(UiUtils.C_TEXT_PRIMARY);
+
+        brandPanel.add(iconLbl);
+        brandPanel.add(titleLbl);
+        titleBar.add(brandPanel, BorderLayout.WEST);
+
+        // Nút tròn tạo nhóm (+)
+        UiUtils.RoundedButton addBtn = new UiUtils.RoundedButton(
+                "+", UiUtils.C_PRIMARY, Color.WHITE, 14);
+        addBtn.setPreferredSize(new Dimension(30, 30));
+        addBtn.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        addBtn.setToolTipText("Tạo nhóm trò chuyện mới");
+        addBtn.addActionListener(e -> {
+            if (listener != null) listener.onCreateGroupRequested();
+        });
+        titleBar.add(addBtn, BorderLayout.EAST);
         top.add(titleBar);
 
-        top.add(buildDivider());
-        top.add(buildSearchBar());
-        top.add(Box.createVerticalStrut(6));
+        // Ô tìm kiếm bo góc pill
+        JPanel searchWrap = new JPanel(new BorderLayout());
+        searchWrap.setBackground(UiUtils.C_CARD_BG);
+        searchWrap.setBorder(new EmptyBorder(0, 14, 10, 14));
+
+        searchField.setFont(UiUtils.F_SMALL);
+        searchField.setBgColor(UiUtils.C_SIDEBAR_LIGHT);
+        searchField.setPreferredSize(new Dimension(230, 34));
+        searchField.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e)  { applyFilter(searchField.getText().trim().toLowerCase()); }
+            @Override public void removeUpdate(DocumentEvent e)  { applyFilter(searchField.getText().trim().toLowerCase()); }
+            @Override public void changedUpdate(DocumentEvent e) { applyFilter(searchField.getText().trim().toLowerCase()); }
+        });
+        searchWrap.add(searchField, BorderLayout.CENTER);
+        top.add(searchWrap);
+
+        // Đường kẻ mờ phân tách
+        JSeparator sep = new JSeparator();
+        sep.setForeground(UiUtils.C_BORDER);
+        sep.setBackground(UiUtils.C_BORDER);
+        sep.setMaximumSize(new Dimension(Integer.MAX_VALUE, 1));
+        top.add(sep);
 
         return top;
     }
 
-    private JPanel buildSearchBar() {
-        JPanel wrapper = new JPanel(new BorderLayout());
-        wrapper.setBackground(COLOR_BG);
-        wrapper.setBorder(new EmptyBorder(6, 10, 0, 10));
-
-        searchField.setFont(FONT_SEARCH);
-        searchField.setBackground(COLOR_SEARCH_BG);
-        searchField.setCaretColor(COLOR_TEXT_PRIMARY);
-        searchField.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(COLOR_DIVIDER, 1, true),
-                new EmptyBorder(6, 10, 6, 10)
-        ));
-
-        // Placeholder
-        searchField.setText("Tìm kiếm...");
-        searchField.setForeground(COLOR_TEXT_SECONDARY);
-
-        searchField.addFocusListener(new FocusAdapter() {
-            @Override public void focusGained(FocusEvent e) {
-                if (searchField.getText().equals("Tìm kiếm...")) {
-                    searchField.setText("");
-                    searchField.setForeground(COLOR_TEXT_PRIMARY);
-                }
-                searchField.setBorder(BorderFactory.createCompoundBorder(
-                        BorderFactory.createLineBorder(COLOR_ITEM_SELECTED, 1, true),
-                        new EmptyBorder(6, 10, 6, 10)
-                ));
-            }
-            @Override public void focusLost(FocusEvent e) {
-                if (searchField.getText().isBlank()) {
-                    searchField.setText("Tìm kiếm...");
-                    searchField.setForeground(COLOR_TEXT_SECONDARY);
-                }
-                searchField.setBorder(BorderFactory.createCompoundBorder(
-                        BorderFactory.createLineBorder(COLOR_DIVIDER, 1, true),
-                        new EmptyBorder(6, 10, 6, 10)
-                ));
-            }
-        });
-
-        searchField.getDocument().addDocumentListener(new DocumentListener() {
-            private void onChanged() {
-                String q = searchField.getText();
-                if (!q.equals("Tìm kiếm...")) applyFilter(q.toLowerCase());
-            }
-            @Override public void insertUpdate(DocumentEvent e)  { onChanged(); }
-            @Override public void removeUpdate(DocumentEvent e)  { onChanged(); }
-            @Override public void changedUpdate(DocumentEvent e) { onChanged(); }
-        });
-
-        wrapper.add(searchField, BorderLayout.CENTER);
-        return wrapper;
-    }
-
-    // ── Scrollable list (peers + rooms) ──────────────────────────
+    // ── Vùng cuộn danh sách (Peers + Rooms) ────────────────────────
     private JScrollPane buildScrollableList() {
         JPanel container = new JPanel();
         container.setLayout(new BoxLayout(container, BoxLayout.Y_AXIS));
-        container.setBackground(COLOR_BG);
+        container.setBackground(UiUtils.C_CARD_BG);
+        container.setBorder(new EmptyBorder(6, 8, 6, 8));
 
-        // Peer section
+        // Section: Tin nhắn trực tiếp
         container.add(buildSectionHeader("TIN NHẮN TRỰC TIẾP"));
         peerListPanel.setLayout(new BoxLayout(peerListPanel, BoxLayout.Y_AXIS));
-        peerListPanel.setBackground(COLOR_BG);
+        peerListPanel.setBackground(UiUtils.C_CARD_BG);
         container.add(peerListPanel);
 
-        // Room section
-        container.add(Box.createVerticalStrut(6));
-        container.add(buildDivider());
-        container.add(buildSectionHeader("NHÓM CHAT"));
+        container.add(Box.createVerticalStrut(12));
+
+        // Section: Nhóm chat
+        container.add(buildSectionHeader("NHÓM TRÒ CHUYỆN"));
         roomListPanel.setLayout(new BoxLayout(roomListPanel, BoxLayout.Y_AXIS));
-        roomListPanel.setBackground(COLOR_BG);
+        roomListPanel.setBackground(UiUtils.C_CARD_BG);
         container.add(roomListPanel);
 
-        // Filler đẩy items lên trên
         container.add(Box.createVerticalGlue());
 
         JScrollPane scroll = new JScrollPane(container);
         scroll.setBorder(null);
-        scroll.setBackground(COLOR_BG);
-        scroll.getViewport().setBackground(COLOR_BG);
+        scroll.setBackground(UiUtils.C_CARD_BG);
+        scroll.getViewport().setBackground(UiUtils.C_CARD_BG);
         scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.getVerticalScrollBar().setUnitIncrement(14);
         scroll.getVerticalScrollBar().setUI(new ThinScrollBarUI());
         return scroll;
     }
 
-    private JPanel buildSectionHeader(String title) {
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 6));
-        panel.setBackground(COLOR_BG);
-        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
-        JLabel lbl = new JLabel(title);
-        lbl.setFont(FONT_SECTION);
-        lbl.setForeground(COLOR_SECTION_HDR);
-        panel.add(lbl);
-        return panel;
+    private JPanel buildSectionHeader(String text) {
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        p.setBackground(UiUtils.C_CARD_BG);
+        p.setMaximumSize(new Dimension(Integer.MAX_VALUE, 26));
+
+        JLabel l = new JLabel(text);
+        l.setFont(UiUtils.F_SMALL_BOLD);
+        l.setForeground(UiUtils.C_TEXT_MUTED);
+        p.add(l);
+        return p;
     }
 
-    // ── Peer item ─────────────────────────────────────────────────
+    // ── Item Peer (Chat 1-1) ──────────────────────────────────────
     private JPanel buildPeerItem(PeerInfo peer) {
         boolean isSelected = peer.equals(selectedItem);
+        boolean isOnline   = (Math.abs(peer.username().hashCode()) % 3 != 0);
 
-        JPanel item = new JPanel(new BorderLayout(10, 0));
-        item.setBackground(isSelected ? COLOR_ITEM_SELECTED : COLOR_ITEM_NORMAL);
-        item.setBorder(new EmptyBorder(8, 10, 8, 10));
-        item.setMaximumSize(new Dimension(Integer.MAX_VALUE, 54));
+        UiUtils.RoundedPanel item = new UiUtils.RoundedPanel(
+                UiUtils.ARC_SM,
+                isSelected ? UiUtils.C_SELECTED_BG : UiUtils.C_CARD_BG,
+                isSelected ? UiUtils.C_BORDER_FOCUS : null
+        );
+        item.setLayout(new BorderLayout(10, 0));
+        item.setBorder(new EmptyBorder(8, 8, 8, 8));
+        item.setMaximumSize(new Dimension(Integer.MAX_VALUE, 58));
         item.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
-        // Avatar
-        item.add(buildAvatar(peer.username(), false), BorderLayout.WEST);
+        // AvatarBadge tròn màu pastel + chấm tròn trạng thái
+        UiUtils.AvatarBadge avatar = new UiUtils.AvatarBadge(peer.username(), 38, false, isOnline, true);
+        item.add(avatar, BorderLayout.WEST);
 
-        // Text (name + status)
-        JPanel textArea = new JPanel(new GridLayout(2, 1, 0, 1));
-        textArea.setOpaque(false);
+        // Tên & trạng thái
+        JPanel textPanel = new JPanel(new GridLayout(2, 1, 0, 2));
+        textPanel.setOpaque(false);
 
         JLabel nameLbl = new JLabel(peer.username());
-        nameLbl.setFont(FONT_USERNAME);
-        nameLbl.setForeground(COLOR_TEXT_PRIMARY);
+        nameLbl.setFont(UiUtils.F_BODY_BOLD);
+        nameLbl.setForeground(isSelected ? UiUtils.C_PRIMARY : UiUtils.C_TEXT_PRIMARY);
 
-        // Online/offline giả lập theo hash — TV1 cập nhật thực sau
-        boolean online = (Math.abs(peer.username().hashCode()) % 3 != 0);
-        JLabel statusLbl = new JLabel(online ? "Đang hoạt động" : "Đang offline");
-        statusLbl.setFont(FONT_SUBTITLE);
-        statusLbl.setForeground(online ? COLOR_ONLINE : COLOR_OFFLINE);
+        JLabel statusLbl = new JLabel(isOnline ? "Đang hoạt động" : "Ngoại tuyến");
+        statusLbl.setFont(UiUtils.F_SMALL);
+        statusLbl.setForeground(isOnline ? UiUtils.C_ONLINE : UiUtils.C_TEXT_MUTED);
 
-        textArea.add(nameLbl);
-        textArea.add(statusLbl);
-        item.add(textArea, BorderLayout.CENTER);
+        textPanel.add(nameLbl);
+        textPanel.add(statusLbl);
+        item.add(textPanel, BorderLayout.CENTER);
 
-        // Online dot
-        JLabel dot = new JLabel("●");
-        dot.setFont(new Font("SansSerif", Font.PLAIN, 10));
-        dot.setForeground(online ? COLOR_ONLINE : COLOR_OFFLINE);
-        dot.setVerticalAlignment(SwingConstants.CENTER);
-        item.add(dot, BorderLayout.EAST);
-
-        // Hover + click
+        // Hover & Click
         item.addMouseListener(new MouseAdapter() {
-            @Override public void mouseEntered(MouseEvent e) {
-                if (!peer.equals(selectedItem)) item.setBackground(COLOR_ITEM_HOVER);
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                if (!peer.equals(selectedItem)) {
+                    item.setBackgroundColor(UiUtils.C_HOVER_BG);
+                }
             }
-            @Override public void mouseExited(MouseEvent e) {
-                if (!peer.equals(selectedItem)) item.setBackground(COLOR_ITEM_NORMAL);
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                if (!peer.equals(selectedItem)) {
+                    item.setBackgroundColor(UiUtils.C_CARD_BG);
+                }
             }
-            @Override public void mouseClicked(MouseEvent e) {
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
                 selectedItem = peer;
                 refreshPeerList(currentFilter());
                 refreshRoomList(currentFilter());
@@ -268,44 +222,55 @@ public final class SidebarPanel extends JPanel {
         return item;
     }
 
-    // ── Room item ─────────────────────────────────────────────────
+    // ── Item Room (Nhóm chat) ─────────────────────────────────────
     private JPanel buildRoomItem(RoomInfo room) {
         boolean isSelected = room.equals(selectedItem);
 
-        JPanel item = new JPanel(new BorderLayout(10, 0));
-        item.setBackground(isSelected ? COLOR_ITEM_SELECTED : COLOR_ITEM_NORMAL);
-        item.setBorder(new EmptyBorder(8, 10, 8, 10));
-        item.setMaximumSize(new Dimension(Integer.MAX_VALUE, 54));
+        UiUtils.RoundedPanel item = new UiUtils.RoundedPanel(
+                UiUtils.ARC_SM,
+                isSelected ? UiUtils.C_SELECTED_BG : UiUtils.C_CARD_BG,
+                isSelected ? UiUtils.C_BORDER_FOCUS : null
+        );
+        item.setLayout(new BorderLayout(10, 0));
+        item.setBorder(new EmptyBorder(8, 8, 8, 8));
+        item.setMaximumSize(new Dimension(Integer.MAX_VALUE, 58));
         item.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
-        // Avatar nhóm
-        item.add(buildAvatar(room.name(), true), BorderLayout.WEST);
+        UiUtils.AvatarBadge avatar = new UiUtils.AvatarBadge(room.name(), 38, true, false, false);
+        item.add(avatar, BorderLayout.WEST);
 
-        // Text
-        JPanel textArea = new JPanel(new GridLayout(2, 1, 0, 1));
-        textArea.setOpaque(false);
+        JPanel textPanel = new JPanel(new GridLayout(2, 1, 0, 2));
+        textPanel.setOpaque(false);
 
         JLabel nameLbl = new JLabel(room.name());
-        nameLbl.setFont(FONT_USERNAME);
-        nameLbl.setForeground(COLOR_TEXT_PRIMARY);
+        nameLbl.setFont(UiUtils.F_BODY_BOLD);
+        nameLbl.setForeground(isSelected ? UiUtils.C_PRIMARY : UiUtils.C_TEXT_PRIMARY);
 
-        JLabel memberLbl = new JLabel("Nhóm chat");
-        memberLbl.setFont(FONT_SUBTITLE);
-        memberLbl.setForeground(COLOR_TEXT_SECONDARY);
+        JLabel subLbl = new JLabel("Nhóm chat");
+        subLbl.setFont(UiUtils.F_SMALL);
+        subLbl.setForeground(UiUtils.C_TEXT_MUTED);
 
-        textArea.add(nameLbl);
-        textArea.add(memberLbl);
-        item.add(textArea, BorderLayout.CENTER);
+        textPanel.add(nameLbl);
+        textPanel.add(subLbl);
+        item.add(textPanel, BorderLayout.CENTER);
 
-        // Hover + click
         item.addMouseListener(new MouseAdapter() {
-            @Override public void mouseEntered(MouseEvent e) {
-                if (!room.equals(selectedItem)) item.setBackground(COLOR_ITEM_HOVER);
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                if (!room.equals(selectedItem)) {
+                    item.setBackgroundColor(UiUtils.C_HOVER_BG);
+                }
             }
-            @Override public void mouseExited(MouseEvent e) {
-                if (!room.equals(selectedItem)) item.setBackground(COLOR_ITEM_NORMAL);
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                if (!room.equals(selectedItem)) {
+                    item.setBackgroundColor(UiUtils.C_CARD_BG);
+                }
             }
-            @Override public void mouseClicked(MouseEvent e) {
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
                 selectedItem = room;
                 refreshPeerList(currentFilter());
                 refreshRoomList(currentFilter());
@@ -316,122 +281,55 @@ public final class SidebarPanel extends JPanel {
         return item;
     }
 
-    // ── Avatar hình tròn ──────────────────────────────────────────
-    private JPanel buildAvatar(String name, boolean isGroup) {
-        Color bg = isGroup
-                ? new Color(0x2E, 0xCC, 0x71)
-                : AVATAR_COLORS[Math.abs(name.hashCode()) % AVATAR_COLORS.length];
-
-        String letter = isGroup
-                ? "\uD83D\uDC65"  // 👥
-                : (name.isEmpty() ? "?" : String.valueOf(Character.toUpperCase(name.charAt(0))));
-
-        JPanel avatar = new JPanel(new GridBagLayout()) {
-            @Override
-            protected void paintComponent(Graphics g) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
-                        RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(bg);
-                g2.fillOval(0, 0, getWidth(), getHeight());
-                g2.dispose();
-                super.paintComponent(g);
-            }
-        };
-        avatar.setOpaque(false);
-        avatar.setPreferredSize(new Dimension(36, 36));
-        avatar.setMinimumSize(new Dimension(36, 36));
-        avatar.setMaximumSize(new Dimension(36, 36));
-
-        JLabel lbl = new JLabel(letter, SwingConstants.CENTER);
-        lbl.setFont(isGroup ? new Font("SansSerif", Font.PLAIN, 16) : FONT_AVATAR);
-        lbl.setForeground(Color.WHITE);
-        avatar.add(lbl);
-        return avatar;
-    }
-
-    // ── Bottom toolbar ────────────────────────────────────────────
+    // ── Bottom Toolbar: Nút Lịch sử & Nút Tạo nhóm ───────────────
     private JPanel buildBottomToolbar() {
-        JPanel bar = new JPanel(new GridLayout(1, 2, 6, 0));
-        bar.setBackground(COLOR_SEARCH_BG);
-        bar.setBorder(new EmptyBorder(10, 10, 10, 10));
+        JPanel bar = new JPanel(new GridLayout(1, 2, 8, 0));
+        bar.setBackground(UiUtils.C_CARD_BG);
+        bar.setBorder(BorderFactory.createCompoundBorder(
+                new MatteBorder(1, 0, 0, 0, UiUtils.C_BORDER),
+                new EmptyBorder(10, 12, 10, 12)
+        ));
 
-        JButton btnHistory = buildToolButton("\uD83D\uDCDC L\u1ecbch s\u1eed"); // 📜 Lịch sử
-        btnHistory.addActionListener(e -> {
+        UiUtils.RoundedButton historyBtn = new UiUtils.RoundedButton(
+                "\uD83D\uDCDC Lịch sử", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY, UiUtils.ARC_SM);
+        historyBtn.addActionListener(e -> {
+            selectedItem = null;
+            refreshPeerList(currentFilter());
+            refreshRoomList(currentFilter());
             if (listener != null) listener.onHistoryRequested();
         });
 
-        JButton btnCreate = buildToolButton("+ T\u1ea1o nh\u00f3m"); // + Tạo nhóm
-        btnCreate.addActionListener(e -> {
+        UiUtils.RoundedButton groupBtn = new UiUtils.RoundedButton(
+                "+ Tạo nhóm", UiUtils.C_PRIMARY_LIGHT, UiUtils.C_PRIMARY, UiUtils.ARC_SM);
+        groupBtn.addActionListener(e -> {
             if (listener != null) listener.onCreateGroupRequested();
         });
 
-        bar.add(btnHistory);
-        bar.add(btnCreate);
+        bar.add(historyBtn);
+        bar.add(groupBtn);
         return bar;
     }
 
-    private JButton buildToolButton(String text) {
-        JButton btn = new JButton(text);
-        btn.setFont(FONT_BTN);
-        btn.setForeground(COLOR_TEXT_PRIMARY);
-        btn.setBackground(COLOR_BTN_BG);
-        btn.setBorderPainted(false);
-        btn.setFocusPainted(false);
-        btn.setOpaque(true);
-        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        btn.setBorder(new EmptyBorder(7, 6, 7, 6));
-        btn.addMouseListener(new MouseAdapter() {
-            @Override public void mouseEntered(MouseEvent e) { btn.setBackground(COLOR_BTN_HOVER); }
-            @Override public void mouseExited(MouseEvent e)  { btn.setBackground(COLOR_BTN_BG);    }
-        });
-        return btn;
-    }
-
-    // ── Divider ───────────────────────────────────────────────────
-    private JSeparator buildDivider() {
-        JSeparator sep = new JSeparator();
-        sep.setForeground(COLOR_DIVIDER);
-        sep.setBackground(COLOR_DIVIDER);
-        sep.setMaximumSize(new Dimension(Integer.MAX_VALUE, 1));
-        return sep;
-    }
-
     // ── Public API ────────────────────────────────────────────────
-
-    /**
-     * Cập nhật danh sách peer (gọi từ ChatFrame sau khi nhận data từ network).
-     * Phải gọi trên EDT.
-     */
     public void setPeers(List<PeerInfo> peers) {
         this.allPeers = new ArrayList<>(peers);
         refreshPeerList(currentFilter());
     }
 
-    /**
-     * Cập nhật danh sách room nhóm (gọi từ ChatFrame).
-     * Phải gọi trên EDT.
-     */
     public void setRooms(List<RoomInfo> rooms) {
         this.allRooms = new ArrayList<>(rooms);
         refreshRoomList(currentFilter());
     }
 
-    /**
-     * Chọn programmatically một peer (ví dụ khi nhận cuộc gọi đến).
-     * Phải gọi trên EDT.
-     */
     public void selectPeer(PeerInfo peer) {
         selectedItem = peer;
         refreshPeerList(currentFilter());
         refreshRoomList(currentFilter());
     }
 
-    // ── Filtering ─────────────────────────────────────────────────
-
+    // ── Filter logic ──────────────────────────────────────────────
     private String currentFilter() {
-        String t = searchField.getText();
-        return t.equals("Tìm kiếm...") ? "" : t.toLowerCase();
+        return searchField.getText().trim().toLowerCase();
     }
 
     private void applyFilter(String query) {
@@ -445,10 +343,11 @@ public final class SidebarPanel extends JPanel {
         for (PeerInfo p : allPeers) {
             if (filter.isEmpty() || p.username().toLowerCase().contains(filter)) {
                 peerListPanel.add(buildPeerItem(p));
+                peerListPanel.add(Box.createVerticalStrut(4));
                 any = true;
             }
         }
-        if (!any) peerListPanel.add(buildEmptyHint("Chưa có peer nào"));
+        if (!any) peerListPanel.add(buildEmptyHint("Chưa có liên hệ nào"));
         peerListPanel.revalidate();
         peerListPanel.repaint();
     }
@@ -459,6 +358,7 @@ public final class SidebarPanel extends JPanel {
         for (RoomInfo r : allRooms) {
             if (filter.isEmpty() || r.name().toLowerCase().contains(filter)) {
                 roomListPanel.add(buildRoomItem(r));
+                roomListPanel.add(Box.createVerticalStrut(4));
                 any = true;
             }
         }
@@ -469,20 +369,17 @@ public final class SidebarPanel extends JPanel {
 
     private JLabel buildEmptyHint(String text) {
         JLabel lbl = new JLabel(text, SwingConstants.CENTER);
-        lbl.setFont(FONT_SUBTITLE);
-        lbl.setForeground(COLOR_TEXT_SECONDARY);
-        lbl.setBorder(new EmptyBorder(10, 10, 10, 10));
+        lbl.setFont(UiUtils.F_SMALL);
+        lbl.setForeground(UiUtils.C_TEXT_HINT);
+        lbl.setBorder(new EmptyBorder(8, 4, 8, 4));
         lbl.setAlignmentX(CENTER_ALIGNMENT);
-        lbl.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
         return lbl;
     }
 
-    // ── Thin scroll bar (inner class, không cần thư viện ngoài) ──
-    private static final class ThinScrollBarUI
-            extends javax.swing.plaf.basic.BasicScrollBarUI {
-
-        private static final Color THUMB = new Color(0x3A, 0x7B, 0xD5, 160);
-        private static final Color TRACK = new Color(0x14, 0x1F, 0x33);
+    // ── Thin scroll bar UI cho giao diện sáng ─────────────────────
+    private static final class ThinScrollBarUI extends javax.swing.plaf.basic.BasicScrollBarUI {
+        private static final Color THUMB = new Color(0x94, 0xA3, 0xB8, 140);
+        private static final Color TRACK = Color.WHITE;
 
         @Override protected void configureScrollBarColors() {
             thumbColor = THUMB;
@@ -496,8 +393,6 @@ public final class SidebarPanel extends JPanel {
             JButton b = new JButton();
             Dimension d = new Dimension(0, 0);
             b.setPreferredSize(d);
-            b.setMinimumSize(d);
-            b.setMaximumSize(d);
             return b;
         }
 
@@ -505,8 +400,7 @@ public final class SidebarPanel extends JPanel {
         protected void paintThumb(Graphics g, JComponent c, Rectangle r) {
             if (r.isEmpty()) return;
             Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
-                    RenderingHints.VALUE_ANTIALIAS_ON);
+            UiUtils.enableAntiAliasing(g2);
             g2.setColor(THUMB);
             g2.fillRoundRect(r.x + 2, r.y, r.width - 4, r.height, 6, 6);
             g2.dispose();

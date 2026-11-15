@@ -3,23 +3,10 @@ package com.voicechat.ui;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.awt.event.*;
 
 /**
- * TV3 – Bước 9: Dialog hiển thị khi nhận cuộc gọi đến (CALL_REQUEST).
- * <p>Modal dialog với tên người gọi, nút Chấp nhận và Từ chối.
- * Kết quả được trả về qua {@link ResponseListener}.</p>
- *
- * <p>Cách dùng từ ChatFrame:</p>
- * <pre>
- *   // Gọi từ onControlMessage callback (phải qua invokeLater):
- *   SwingUtilities.invokeLater(() ->
- *       new IncomingCallDialog(chatFrame, callerName, new ResponseListener() {
- *           public void onAccepted() { callPanel.setState(IN_CALL, callerName); }
- *           public void onRejected() { /* send CALL_REJECT *&#47; }
- *       }).setVisible(true)
- *   );
- * </pre>
+ * VoiceLink IncomingCallDialog: Hộp thoại cuộc gọi đến dạng thẻ bo tròn hiện đại,
+ * loại bỏ hoàn toàn viền và thanh tiêu đề xám thô cứng của JDialog mặc định.
  */
 public final class IncomingCallDialog extends JDialog {
 
@@ -28,97 +15,57 @@ public final class IncomingCallDialog extends JDialog {
         void onRejected();
     }
 
-    // ── Màu sắc ───────────────────────────────────────────────────
-    private static final Color COLOR_BG     = Color.WHITE;
-    private static final Color COLOR_HDR    = new Color(0x1E, 0x2D, 0x48);
-    private static final Color COLOR_ACCEPT = new Color(0x27, 0xAE, 0x60);
-    private static final Color COLOR_REJECT = new Color(0xE7, 0x4C, 0x3C);
-    private static final Color COLOR_TEXT   = new Color(0x2C, 0x3E, 0x50);
-    private static final Color COLOR_SUB    = new Color(0x7F, 0x8C, 0x8D);
-
-    // ── Font ─────────────────────────────────────────────────────
-    private static final Font FONT_ICON   = new Font("SansSerif", Font.PLAIN, 44);
-    private static final Font FONT_TITLE  = new Font("SansSerif", Font.BOLD,  17);
-    private static final Font FONT_SUB    = new Font("SansSerif", Font.PLAIN, 12);
-    private static final Font FONT_BTN    = new Font("SansSerif", Font.BOLD,  13);
-
-    // ─────────────────────────────────────────────────────────────
-
     public IncomingCallDialog(Frame owner, String callerName, ResponseListener listener) {
-        super(owner, "Cu\u1ED9c g\u1ECDi \u0111\u1EBFn", true); // "Cuộc gọi đến"
+        super(owner, "Cuộc gọi đến", true);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
-        setSize(340, 310);
-        setResizable(false);
+        setUndecorated(true);
+        setBackground(new Color(0, 0, 0, 0)); // Nền trong suốt để viền bo tròn phát huy tác dụng
+        setSize(360, 320);
         setLocationRelativeTo(owner);
 
-        JPanel root = new JPanel(new BorderLayout());
-        root.setBackground(COLOR_BG);
-        root.add(buildHeader(),            BorderLayout.NORTH);
-        root.add(buildBody(callerName, listener), BorderLayout.CENTER);
-        setContentPane(root);
-    }
+        // Khung thẻ bo góc hiện đại có đổ bóng nhẹ
+        UiUtils.RoundedPanel card = new UiUtils.RoundedPanel(
+                UiUtils.ARC_LG, UiUtils.C_CARD_BG, UiUtils.C_BORDER, true);
+        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+        card.setBorder(new EmptyBorder(32, 28, 28, 28));
 
-    // ── Header (nền tối, icon) ────────────────────────────────────
-    private JPanel buildHeader() {
-        JPanel header = new JPanel(new GridBagLayout()) {
-            @Override protected void paintComponent(Graphics g) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
-                        RenderingHints.VALUE_ANTIALIAS_ON);
-                // Gradient header giống LoginFrame
-                GradientPaint gp = new GradientPaint(
-                        0, 0,           new Color(0x1A, 0x27, 0x44),
-                        0, getHeight(), new Color(0x2D, 0x4A, 0x8A));
-                g2.setPaint(gp);
-                g2.fillRect(0, 0, getWidth(), getHeight());
-                g2.dispose();
-            }
-        };
-        header.setPreferredSize(new Dimension(340, 100));
+        // 1. Avatar lớn phát sáng
+        UiUtils.AvatarBadge avatar = new UiUtils.AvatarBadge(callerName, 64, false, true, false);
+        avatar.setSpeaking(true);
+        avatar.setAlignmentX(Component.CENTER_ALIGNMENT);
+        card.add(avatar);
+        card.add(Box.createVerticalStrut(16));
 
-        // Pulsing phone icon
-        JLabel iconLbl = new JLabel("\uD83D\uDCF2", SwingConstants.CENTER); // 📲
-        iconLbl.setFont(FONT_ICON);
-        iconLbl.setForeground(Color.WHITE);
-        header.add(iconLbl);
-
-        return header;
-    }
-
-    // ── Body (tên + nút) ─────────────────────────────────────────
-    private JPanel buildBody(String callerName, ResponseListener listener) {
-        JPanel body = new JPanel();
-        body.setLayout(new BoxLayout(body, BoxLayout.Y_AXIS));
-        body.setBackground(COLOR_BG);
-        body.setBorder(new EmptyBorder(28, 30, 24, 30));
-
-        // Avatar + tên người gọi
-        JPanel avatarRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
-        avatarRow.setBackground(COLOR_BG);
-        avatarRow.add(UiUtils.buildAvatarCircle(callerName, 44, false));
-
+        // 2. Tên người gọi
         JLabel callerLbl = new JLabel(callerName, SwingConstants.CENTER);
-        callerLbl.setFont(FONT_TITLE);
-        callerLbl.setForeground(COLOR_TEXT);
+        callerLbl.setFont(UiUtils.F_TITLE_LG);
+        callerLbl.setForeground(UiUtils.C_TEXT_PRIMARY);
         callerLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
+        card.add(callerLbl);
+        card.add(Box.createVerticalStrut(6));
 
-        JLabel subLbl = new JLabel("\u0110ang g\u1ECDi cho b\u1EA1n...", SwingConstants.CENTER); // "Đang gọi cho bạn..."
-        subLbl.setFont(FONT_SUB);
-        subLbl.setForeground(COLOR_SUB);
+        // 3. Phụ đề
+        JLabel subLbl = new JLabel("Cuộc gọi thoại P2P đến...", SwingConstants.CENTER);
+        subLbl.setFont(UiUtils.F_BODY);
+        subLbl.setForeground(UiUtils.C_TEXT_MUTED);
         subLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
+        card.add(subLbl);
+        card.add(Box.createVerticalStrut(28));
 
-        // Button row
-        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 16, 0));
-        btnRow.setBackground(COLOR_BG);
-        btnRow.setAlignmentX(Component.CENTER_ALIGNMENT);
+        // 4. Hàng nút Chấp nhận / Từ chối
+        JPanel btnRow = new JPanel(new GridLayout(1, 2, 14, 0));
+        btnRow.setOpaque(false);
+        btnRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
 
-        JButton acceptBtn = buildBtn("\u2713 Ch\u1EA5p nh\u1EADn", COLOR_ACCEPT); // "✓ Chấp nhận"
+        UiUtils.RoundedButton acceptBtn = new UiUtils.RoundedButton(
+                "✓  Chấp nhận", UiUtils.C_ONLINE, Color.WHITE, UiUtils.ARC_MD);
         acceptBtn.addActionListener(e -> {
             dispose();
             if (listener != null) listener.onAccepted();
         });
 
-        JButton rejectBtn = buildBtn("\u2715 T\u1EEB ch\u1ED1i", COLOR_REJECT); // "✕ Từ chối"
+        UiUtils.RoundedButton rejectBtn = new UiUtils.RoundedButton(
+                "✕  Từ chối", UiUtils.C_DANGER, Color.WHITE, UiUtils.ARC_MD);
         rejectBtn.addActionListener(e -> {
             dispose();
             if (listener != null) listener.onRejected();
@@ -126,32 +73,8 @@ public final class IncomingCallDialog extends JDialog {
 
         btnRow.add(acceptBtn);
         btnRow.add(rejectBtn);
+        card.add(btnRow);
 
-        body.add(avatarRow);
-        body.add(Box.createVerticalStrut(14));
-        body.add(callerLbl);
-        body.add(Box.createVerticalStrut(6));
-        body.add(subLbl);
-        body.add(Box.createVerticalStrut(28));
-        body.add(btnRow);
-
-        return body;
-    }
-
-    private JButton buildBtn(String text, Color bg) {
-        JButton btn = new JButton(text);
-        btn.setFont(FONT_BTN);
-        btn.setForeground(Color.WHITE);
-        btn.setBackground(bg);
-        btn.setBorderPainted(false);
-        btn.setFocusPainted(false);
-        btn.setOpaque(true);
-        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        btn.setBorder(new EmptyBorder(10, 22, 10, 22));
-        btn.addMouseListener(new MouseAdapter() {
-            @Override public void mouseEntered(MouseEvent e) { btn.setBackground(bg.darker()); }
-            @Override public void mouseExited(MouseEvent e)  { btn.setBackground(bg); }
-        });
-        return btn;
+        setContentPane(card);
     }
 }

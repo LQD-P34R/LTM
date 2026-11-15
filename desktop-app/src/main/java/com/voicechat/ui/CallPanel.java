@@ -6,53 +6,20 @@ import java.awt.*;
 import java.awt.event.*;
 
 /**
- * TV3 – Bước 7: Panel quản lý cuộc gọi voice với 3 trạng thái.
- * <ul>
- *   <li>{@link CallState#IDLE} — Chưa có cuộc gọi nào.</li>
- *   <li>{@link CallState#RINGING} — Đang gọi ra, chờ đối phương trả lời.</li>
- *   <li>{@link CallState#IN_CALL} — Đang trong cuộc gọi, hiển thị timer.</li>
- * </ul>
- *
- * <p>Cuộc gọi đến được xử lý bởi {@link IncomingCallDialog}.
- * Khi người dùng chấp nhận, ChatFrame gọi {@code setState(IN_CALL, callerName)}.</p>
+ * VoiceLink CallPanel: Giao diện cuộc gọi voice chuẩn VoiceLink (Page 3 trong PDF).
+ * <p>Hiển thị thẻ thành viên với Avatar lớn ở trung tâm (có hiệu ứng vòng hào quang phát sáng khi đang nói),
+ * tên to đậm bên dưới, đồng hồ đếm thời gian và thanh điều khiển nổi (Floating Control Bar) bo tròn ở cạnh dưới.</p>
  */
 public final class CallPanel extends JPanel {
 
-    // ── Trạng thái ────────────────────────────────────────────────
     public enum CallState { IDLE, RINGING, IN_CALL }
 
-    // ── Callback ──────────────────────────────────────────────────
     public interface CallListener {
-        /** Người dùng huỷ cuộc gọi đang đổ chuông (RINGING → IDLE). */
         void onCallCancelled();
-        /** Người dùng kết thúc cuộc gọi (IN_CALL → IDLE). */
         void onCallEnded();
-        /** Người dùng toggle mute. */
         void onMuteToggled(boolean muted);
     }
 
-    // ── Màu sắc ───────────────────────────────────────────────────
-    private static final Color COLOR_BG        = new Color(0xF5, 0xF7, 0xFA);
-    private static final Color COLOR_CARD_BG   = Color.WHITE;
-    private static final Color COLOR_BORDER    = new Color(0xD0, 0xD8, 0xE4);
-    private static final Color COLOR_TEXT_PRI  = new Color(0x2C, 0x3E, 0x50);
-    private static final Color COLOR_TEXT_SEC  = new Color(0x7F, 0x8C, 0x8D);
-    private static final Color COLOR_BTN_END   = new Color(0xE7, 0x4C, 0x3C);
-    private static final Color COLOR_BTN_MUTE  = new Color(0xF3, 0x9C, 0x12);
-    private static final Color COLOR_BTN_MUTED = new Color(0x7F, 0x8C, 0x8D);
-    private static final Color COLOR_BTN_CANCEL= new Color(0x95, 0xA5, 0xA6);
-    private static final Color COLOR_TIMER     = new Color(0x27, 0xAE, 0x60);
-    private static final Color COLOR_RINGING   = new Color(0xF3, 0x9C, 0x12);
-    private static final Color COLOR_IN_CALL   = new Color(0x27, 0xAE, 0x60);
-
-    // ── Font ─────────────────────────────────────────────────────
-    private static final Font FONT_ICON   = new Font("SansSerif", Font.PLAIN, 56);
-    private static final Font FONT_TITLE  = new Font("SansSerif", Font.BOLD,  20);
-    private static final Font FONT_SUB    = new Font("SansSerif", Font.PLAIN, 13);
-    private static final Font FONT_TIMER  = new Font("SansSerif", Font.BOLD,  36);
-    private static final Font FONT_BTN    = new Font("SansSerif", Font.BOLD,  13);
-
-    // ── Widgets ───────────────────────────────────────────────────
     private final CallListener listener;
     private CallState  state    = CallState.IDLE;
     private boolean    isMuted  = false;
@@ -60,184 +27,209 @@ public final class CallPanel extends JPanel {
     private String     currentPeerName = "";
     private javax.swing.Timer callTimer;
 
-    private final JLabel iconLbl   = new JLabel("", SwingConstants.CENTER);
+    // Center elements
+    private final UiUtils.AvatarBadge avatarBadge = new UiUtils.AvatarBadge("", 96, false, true, false);
     private final JLabel titleLbl  = new JLabel("", SwingConstants.CENTER);
     private final JLabel subLbl    = new JLabel("", SwingConstants.CENTER);
     private final JLabel timerLbl  = new JLabel("00:00", SwingConstants.CENTER);
-    private final JButton btnMute  = new JButton();
-    private final JButton btnEnd   = new JButton();
-    private final JButton btnCancel= new JButton();
-    private final JPanel btnPanel  = new JPanel(new FlowLayout(FlowLayout.CENTER, 16, 0));
 
-    // ─────────────────────────────────────────────────────────────
+    // Floating Control buttons
+    private final JButton btnMute    = createCircularBtn("\uD83C\uDFA4", "Tắt/Bật mic", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY); // 🎤
+    private final JButton btnSpeaker = createCircularBtn("\uD83D\uDD0A", "Loa ngoài", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY); // 🔊
+    private final JButton btnEnd     = createCircularBtn("\uD83D\uDCF5", "Kết thúc cuộc gọi", UiUtils.C_DANGER, Color.WHITE);             // 📵
+    private final JButton btnCancel  = createCircularBtn("\u2715", "Huỷ gọi", UiUtils.C_DANGER, Color.WHITE);                              // ✕
+
+    private final JPanel floatingBar = new UiUtils.RoundedPanel(
+            UiUtils.ARC_XL, UiUtils.C_CARD_BG, UiUtils.C_BORDER, true);
 
     public CallPanel(CallListener listener) {
         this.listener = listener;
         setLayout(new BorderLayout());
-        setBackground(COLOR_BG);
-        buildButtons();
+        setBackground(UiUtils.C_APP_BG);
+
         buildUI();
+        initActions();
         applyState(CallState.IDLE, "");
     }
 
-    // ── Khởi tạo nút (một lần) ───────────────────────────────────
-    private void buildButtons() {
-        styleBtn(btnMute,   "\uD83C\uDFA4 Mute",         COLOR_BTN_MUTE,   110, 44);
-        styleBtn(btnEnd,    "\uD83D\uDCF5 K\u1EBFt th\u00FAc", COLOR_BTN_END, 130, 44);  // 📵 Kết thúc
-        styleBtn(btnCancel, "\uD83D\uDEAB Hu\u1EF7 g\u1ECDi",  COLOR_BTN_CANCEL, 120, 44); // 🚫 Huỷ gọi
+    private void buildUI() {
+        // Trung tâm: Thẻ thành viên
+        JPanel centerWrapper = new JPanel(new GridBagLayout());
+        centerWrapper.setOpaque(false);
 
+        UiUtils.RoundedPanel memberCard = new UiUtils.RoundedPanel(
+                UiUtils.ARC_LG, UiUtils.C_CARD_BG, UiUtils.C_BORDER, true);
+        memberCard.setLayout(new BoxLayout(memberCard, BoxLayout.Y_AXIS));
+        memberCard.setBorder(new EmptyBorder(40, 50, 40, 50));
+        memberCard.setPreferredSize(new Dimension(460, 380));
+
+        avatarBadge.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        titleLbl.setFont(UiUtils.F_TITLE_LG);
+        titleLbl.setForeground(UiUtils.C_TEXT_PRIMARY);
+        titleLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        subLbl.setFont(UiUtils.F_BODY);
+        subLbl.setForeground(UiUtils.C_TEXT_MUTED);
+        subLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        timerLbl.setFont(new Font("Segoe UI", Font.BOLD, 32));
+        timerLbl.setForeground(UiUtils.C_ONLINE);
+        timerLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        memberCard.add(avatarBadge);
+        memberCard.add(Box.createVerticalStrut(20));
+        memberCard.add(titleLbl);
+        memberCard.add(Box.createVerticalStrut(8));
+        memberCard.add(subLbl);
+        memberCard.add(Box.createVerticalStrut(14));
+        memberCard.add(timerLbl);
+
+        centerWrapper.add(memberCard);
+        add(centerWrapper, BorderLayout.CENTER);
+
+        // Đáy: Thanh điều khiển nổi (Floating Control Bar)
+        JPanel bottomWrap = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 18));
+        bottomWrap.setOpaque(false);
+
+        floatingBar.setLayout(new FlowLayout(FlowLayout.CENTER, 18, 10));
+        floatingBar.setBorder(new EmptyBorder(4, 16, 4, 16));
+
+        floatingBar.add(btnMute);
+        floatingBar.add(btnSpeaker);
+        floatingBar.add(btnEnd);
+        floatingBar.add(btnCancel);
+
+        bottomWrap.add(floatingBar);
+        add(bottomWrap, BorderLayout.SOUTH);
+    }
+
+    private static JButton createCircularBtn(String icon, String tooltip, Color bg, Color fg) {
+        JButton btn = new JButton(icon) {
+            private boolean isHover = false;
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                UiUtils.enableAntiAliasing(g2);
+                Color c = getBackground();
+                if (isHover) c = c.darker();
+                g2.setColor(c);
+                g2.fillOval(0, 0, getWidth(), getHeight());
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+        btn.setFont(new Font("Segoe UI", Font.PLAIN, 18));
+        btn.setForeground(fg);
+        btn.setBackground(bg);
+        btn.setPreferredSize(new Dimension(50, 50));
+        btn.setOpaque(false);
+        btn.setContentAreaFilled(false);
+        btn.setBorderPainted(false);
+        btn.setFocusPainted(false);
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btn.setToolTipText(tooltip);
+
+        btn.addMouseListener(new MouseAdapter() {
+            @Override public void mouseEntered(MouseEvent e) { btn.repaint(); }
+            @Override public void mouseExited(MouseEvent e)  { btn.repaint(); }
+        });
+        return btn;
+    }
+
+    private void initActions() {
         btnMute.addActionListener(e -> {
             isMuted = !isMuted;
             setMuteState(isMuted);
             if (listener != null) listener.onMuteToggled(isMuted);
         });
+
         btnEnd.addActionListener(e -> {
             setState(CallState.IDLE, "");
             if (listener != null) listener.onCallEnded();
         });
+
         btnCancel.addActionListener(e -> {
             setState(CallState.IDLE, "");
             if (listener != null) listener.onCallCancelled();
         });
     }
 
-    private void styleBtn(JButton btn, String text, Color bg, int w, int h) {
-        btn.setText(text);
-        btn.setFont(FONT_BTN);
-        btn.setForeground(Color.WHITE);
-        btn.setBackground(bg);
-        btn.setBorderPainted(false);
-        btn.setFocusPainted(false);
-        btn.setOpaque(true);
-        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        btn.setBorder(new EmptyBorder(10, 20, 10, 20));
-        btn.setPreferredSize(new Dimension(w, h));
-        final Color normalBg = bg;
-        btn.addMouseListener(new MouseAdapter() {
-            @Override public void mouseEntered(MouseEvent e) {
-                if (btn.isEnabled()) btn.setBackground(normalBg.darker());
-            }
-            @Override public void mouseExited(MouseEvent e) {
-                if (btn.isEnabled()) {
-                    // Giữ màu MUTED nếu đang muted
-                    btn.setBackground(btn == btnMute && isMuted ? COLOR_BTN_MUTED : normalBg);
-                }
-            }
-        });
-    }
-
-    // ── Dựng layout card ─────────────────────────────────────────
-    private void buildUI() {
-        JPanel card = new JPanel();
-        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
-        card.setBackground(COLOR_CARD_BG);
-        card.setBorder(new EmptyBorder(60, 60, 60, 60));
-
-        iconLbl.setFont(FONT_ICON);
-        iconLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        titleLbl.setFont(FONT_TITLE);
-        titleLbl.setForeground(COLOR_TEXT_PRI);
-        titleLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        subLbl.setFont(FONT_SUB);
-        subLbl.setForeground(COLOR_TEXT_SEC);
-        subLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        timerLbl.setFont(FONT_TIMER);
-        timerLbl.setForeground(COLOR_TIMER);
-        timerLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        btnPanel.setBackground(COLOR_CARD_BG);
-        btnPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        card.add(iconLbl);
-        card.add(Box.createVerticalStrut(20));
-        card.add(titleLbl);
-        card.add(Box.createVerticalStrut(8));
-        card.add(subLbl);
-        card.add(Box.createVerticalStrut(14));
-        card.add(timerLbl);
-        card.add(Box.createVerticalStrut(32));
-        card.add(btnPanel);
-
-        JPanel wrapper = new JPanel(new GridBagLayout());
-        wrapper.setBackground(COLOR_BG);
-        wrapper.add(card);
-        add(wrapper, BorderLayout.CENTER);
-    }
-
-    // ── Áp dụng trạng thái ───────────────────────────────────────
-    private void applyState(CallState newState, String peerName) {
+    public void setState(CallState newState, String peerName) {
         this.state = newState;
-        this.currentPeerName = peerName;
-        btnPanel.removeAll();
-        stopTimer();
-        timerLbl.setVisible(false);
+        this.currentPeerName = peerName != null ? peerName : "";
+        applyState(newState, currentPeerName);
+    }
 
-        switch (newState) {
+    public void setMuteState(boolean muted) {
+        this.isMuted = muted;
+        if (muted) {
+            btnMute.setBackground(UiUtils.C_WARNING);
+            btnMute.setForeground(Color.WHITE);
+            btnMute.setToolTipText("Bật mic (đang tắt)");
+        } else {
+            btnMute.setBackground(UiUtils.C_SIDEBAR_LIGHT);
+            btnMute.setForeground(UiUtils.C_TEXT_PRIMARY);
+            btnMute.setToolTipText("Tắt mic");
+        }
+        btnMute.repaint();
+    }
+
+    public CallState getState() { return state; }
+    public String getCurrentPeerName() { return currentPeerName; }
+    public int getCallDurationSeconds() { return callSecs; }
+
+    private void applyState(CallState s, String name) {
+        stopTimer();
+        switch (s) {
             case IDLE -> {
-                iconLbl.setText("\uD83D\uDCDE"); // 📞
-                iconLbl.setForeground(new Color(0xCC, 0xD5, 0xE0));
-                titleLbl.setText("Ch\u01B0a c\u00F3 cu\u1ED9c g\u1ECDi n\u00E0o"); // Chưa có cuộc gọi nào
-                subLbl.setText("Ch\u1ECDn m\u1ED9t li\u00EAn h\u1EC7 v\u00E0 nh\u1EA5n n\u00FAt G\u1ECDi \u0111\u1EC3 b\u1EAFt \u0111\u1EA7u");
+                avatarBadge.setName("VoiceLink");
+                avatarBadge.setSpeaking(false);
+                titleLbl.setText("Chưa có cuộc gọi nào");
+                subLbl.setText("Chọn một liên hệ từ danh bạ bên trái để bắt đầu gọi");
+                timerLbl.setVisible(false);
+
+                btnMute.setVisible(false);
+                btnSpeaker.setVisible(false);
+                btnEnd.setVisible(false);
+                btnCancel.setVisible(false);
+                floatingBar.setVisible(false);
             }
             case RINGING -> {
-                iconLbl.setText("\uD83D\uDCF2"); // 📲
-                iconLbl.setForeground(COLOR_RINGING);
-                titleLbl.setText("\u0110ang g\u1ECDi \u0111\u1EBFn " + peerName); // Đang gọi đến
-                subLbl.setText("\u0110ang ch\u1EDD \u0111\u1ED1i ph\u01B0\u01A1ng tr\u1EA3 l\u1EDDi..."); // Đang chờ đối phương trả lời...
-                btnPanel.add(btnCancel);
+                avatarBadge.setName(name);
+                avatarBadge.setSpeaking(true);
+                titleLbl.setText("Đang gọi đến " + name);
+                subLbl.setText("Đang chờ đối phương trả lời...");
+                timerLbl.setVisible(false);
+
+                btnMute.setVisible(false);
+                btnSpeaker.setVisible(false);
+                btnEnd.setVisible(false);
+                btnCancel.setVisible(true);
+                floatingBar.setVisible(true);
             }
             case IN_CALL -> {
-                iconLbl.setText("\uD83D\uDCDE"); // 📞
-                iconLbl.setForeground(COLOR_IN_CALL);
-                titleLbl.setText("\u0110ang g\u1ECDi v\u1EDBi " + peerName); // Đang gọi với
-                subLbl.setText("Cu\u1ED9c g\u1ECDi \u0111ang di\u1EC5n ra"); // Cuộc gọi đang diễn ra
+                avatarBadge.setName(name);
+                avatarBadge.setSpeaking(true);
+                titleLbl.setText(name);
+                subLbl.setText("Cuộc gọi thoại đang diễn ra • Kết nối P2P trực tiếp");
                 timerLbl.setText("00:00");
                 timerLbl.setVisible(true);
-                callSecs = 0;
-                isMuted  = false;
-                setMuteState(false);
-                btnPanel.add(btnMute);
-                btnPanel.add(btnEnd);
+
+                btnMute.setVisible(true);
+                btnSpeaker.setVisible(true);
+                btnEnd.setVisible(true);
+                btnCancel.setVisible(false);
+                floatingBar.setVisible(true);
                 startTimer();
             }
         }
-
-        btnPanel.revalidate();
-        btnPanel.repaint();
         revalidate();
         repaint();
     }
 
-    // ── Public API ────────────────────────────────────────────────
-
-    /**
-     * Chuyển trạng thái giao diện.
-     * Phải gọi trên EDT.
-     */
-    public void setState(CallState newState, String peerName) {
-        applyState(newState, peerName);
-    }
-
-    /**
-     * Cập nhật trạng thái nút Mute/Unmute.
-     * Phải gọi trên EDT.
-     */
-    public void setMuteState(boolean muted) {
-        this.isMuted = muted;
-        if (muted) {
-            btnMute.setText("\uD83D\uDD07 Unmute"); // 🔇
-            btnMute.setBackground(COLOR_BTN_MUTED);
-        } else {
-            btnMute.setText("\uD83C\uDFA4 Mute"); // 🎤
-            btnMute.setBackground(COLOR_BTN_MUTE);
-        }
-    }
-
-    // ── Timer ─────────────────────────────────────────────────────
     private void startTimer() {
+        callSecs = 0;
         callTimer = new javax.swing.Timer(1000, e -> {
             callSecs++;
             int m = callSecs / 60;

@@ -9,109 +9,96 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
 /**
- * TV3 – Bước 3A: Render một ChatMessage thành bubble chat.
- * <p>Tin của mình: căn phải, nền xanh accent.<br>
- * Tin của người khác: căn trái, nền xám nhạt.</p>
- *
- * <p>Dùng trong DirectChatPanel và GroupChatPanel:</p>
- * <pre>
- *   JPanel bubble = new ChatBubbleRenderer(msg, localUserId);
- *   messageContainer.add(bubble);
- * </pre>
+ * VoiceLink ChatBubbleRenderer: Render bong bóng tin nhắn bo tròn 2 chiều mượt mà.
+ * <p>Tin nhắn của mình: căn phải, màu chủ đạo C_PRIMARY, chữ trắng, dấu kiểm nhận ✓✓.<br>
+ * Tin nhắn người khác: căn trái, thẻ trắng tinh C_CARD_BG có viền mảnh 1px C_BORDER, kèm avatar nhỏ.</p>
  */
 public final class ChatBubbleRenderer extends JPanel {
-
-    // ── Màu sắc bubble ────────────────────────────────────────────
-    private static final Color COLOR_MINE_BG    = new Color(0x3A, 0x7B, 0xD5);
-    private static final Color COLOR_OTHER_BG   = new Color(0xE8, 0xEC, 0xF0);
-    private static final Color COLOR_MINE_TEXT  = Color.WHITE;
-    private static final Color COLOR_OTHER_TEXT = new Color(0x2C, 0x3E, 0x50);
-    private static final Color COLOR_MINE_TIME  = new Color(0xBB, 0xD4, 0xF8);
-    private static final Color COLOR_OTHER_TIME = new Color(0x95, 0xA5, 0xA6);
-    private static final Color COLOR_SENDER     = new Color(0x3A, 0x7B, 0xD5);
-    private static final Color COLOR_ROW_BG     = new Color(0xF5, 0xF7, 0xFA);
-
-    // ── Font ─────────────────────────────────────────────────────
-    private static final Font FONT_TEXT   = new Font("SansSerif", Font.PLAIN, 13);
-    private static final Font FONT_TIME   = new Font("SansSerif", Font.PLAIN, 10);
-    private static final Font FONT_SENDER = new Font("SansSerif", Font.BOLD,  11);
 
     private static final DateTimeFormatter TIME_FMT =
             DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault());
 
-    // Góc bo tròn của bubble
-    private static final int ARC = 18;
-
-    // Màu nền bubble (cần lưu để paintComponent dùng)
-    private final Color bubbleColor;
-
-    // ─────────────────────────────────────────────────────────────
+    private static final int BUBBLE_ARC = 16;
 
     public ChatBubbleRenderer(ChatMessage msg, String localUserId) {
         boolean isMine = msg.senderId().equals(localUserId);
-        this.bubbleColor = isMine ? COLOR_MINE_BG : COLOR_OTHER_BG;
 
         setLayout(new BorderLayout());
         setOpaque(false);
-        // Margin dọc giữa các bubble
-        setBorder(new EmptyBorder(4, 12, 4, 12));
+        setBorder(new EmptyBorder(4, 16, 4, 16));
 
-        // Row căn phải hoặc trái
         JPanel row = new JPanel(new FlowLayout(
-                isMine ? FlowLayout.RIGHT : FlowLayout.LEFT, 0, 0));
+                isMine ? FlowLayout.RIGHT : FlowLayout.LEFT, 8, 0));
         row.setOpaque(false);
+
+        // Nếu là tin nhắn của người khác, hiển thị thêm avatar nhỏ bên trái
+        if (!isMine) {
+            UiUtils.AvatarBadge avatar = new UiUtils.AvatarBadge(msg.senderId(), 28, false, false, false);
+            row.add(avatar);
+        }
+
         row.add(buildBubble(msg, isMine));
         add(row, BorderLayout.CENTER);
     }
 
-    // ── Dựng bubble nội dung ──────────────────────────────────────
     private JPanel buildBubble(ChatMessage msg, boolean isMine) {
         JPanel bubble = new JPanel(new BorderLayout(0, 3)) {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
-                        RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(bubbleColor);
-                g2.fillRoundRect(0, 0, getWidth(), getHeight(), ARC, ARC);
+                UiUtils.enableAntiAliasing(g2);
+
+                int w = getWidth();
+                int h = getHeight();
+
+                if (isMine) {
+                    // Nền màu chủ đạo xanh
+                    g2.setColor(UiUtils.C_PRIMARY);
+                    g2.fillRoundRect(0, 0, w, h, BUBBLE_ARC, BUBBLE_ARC);
+                } else {
+                    // Nền trắng tinh + viền mảnh tinh tế 1px
+                    g2.setColor(UiUtils.C_CARD_BG);
+                    g2.fillRoundRect(0, 0, w, h, BUBBLE_ARC, BUBBLE_ARC);
+                    g2.setColor(UiUtils.C_BORDER);
+                    g2.setStroke(new BasicStroke(1f));
+                    g2.drawRoundRect(0, 0, w - 1, h - 1, BUBBLE_ARC, BUBBLE_ARC);
+                }
                 g2.dispose();
-                // Không gọi super để tránh nền mặc định đè lên
             }
         };
         bubble.setOpaque(false);
-        bubble.setBorder(new EmptyBorder(10, 14, 8, 14));
+        bubble.setBorder(new EmptyBorder(8, 14, 8, 14));
 
-        // ── Tên người gửi (chỉ hiển thị cho tin của người khác) ──
+        // Tên người gửi (cho tin nhắn của người khác)
         if (!isMine) {
             JLabel senderLbl = new JLabel(msg.senderId());
-            senderLbl.setFont(FONT_SENDER);
-            senderLbl.setForeground(COLOR_SENDER);
+            senderLbl.setFont(UiUtils.F_SMALL_BOLD);
+            senderLbl.setForeground(UiUtils.avatarColorFor(msg.senderId()));
             bubble.add(senderLbl, BorderLayout.NORTH);
         }
 
-        // ── Nội dung tin nhắn ─────────────────────────────────────
+        // Nội dung tin nhắn
         JTextArea textArea = new JTextArea(msg.text());
-        textArea.setFont(FONT_TEXT);
-        textArea.setForeground(isMine ? COLOR_MINE_TEXT : COLOR_OTHER_TEXT);
+        textArea.setFont(UiUtils.F_BODY);
+        textArea.setForeground(isMine ? UiUtils.C_TEXT_LIGHT : UiUtils.C_TEXT_PRIMARY);
         textArea.setOpaque(false);
         textArea.setEditable(false);
         textArea.setFocusable(false);
         textArea.setLineWrap(true);
-        textArea.setWrapStyleWord(false);
-        // Width cứng để lineWrap hoạt động đúng trong BoxLayout
+        textArea.setWrapStyleWord(true);
         textArea.setMaximumSize(new Dimension(380, Integer.MAX_VALUE));
-        bubble.setMaximumSize(new Dimension(400, Integer.MAX_VALUE));
+        bubble.setMaximumSize(new Dimension(420, Integer.MAX_VALUE));
         bubble.add(textArea, BorderLayout.CENTER);
 
-        // ── Footer: thời gian (+ ✓✓ cho tin của mình) ────────────
+        // Footer: Thời gian
         JPanel footer = new JPanel(new FlowLayout(
                 isMine ? FlowLayout.RIGHT : FlowLayout.LEFT, 0, 0));
         footer.setOpaque(false);
 
         String timeStr = TIME_FMT.format(msg.sentAt());
         JLabel timeLbl = new JLabel(isMine ? timeStr + "  \u2713\u2713" : timeStr);
-        timeLbl.setFont(FONT_TIME);
-        timeLbl.setForeground(isMine ? COLOR_MINE_TIME : COLOR_OTHER_TIME);
+        timeLbl.setFont(UiUtils.F_SMALL);
+        timeLbl.setForeground(isMine ? new Color(255, 255, 255, 190) : UiUtils.C_TEXT_MUTED);
         footer.add(timeLbl);
 
         bubble.add(footer, BorderLayout.SOUTH);
