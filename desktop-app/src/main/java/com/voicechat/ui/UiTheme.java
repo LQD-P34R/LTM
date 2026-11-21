@@ -5,8 +5,8 @@ import java.io.InputStream;
 public final class UiTheme {
   private UiTheme() {}
 
-  public static final Font REGULAR_FONT = loadFont("/fonts/BeVietnamPro-Regular.ttf", Font.PLAIN);
-  public static final Font SEMIBOLD_FONT = loadFont("/fonts/BeVietnamPro-SemiBold.ttf", Font.BOLD);
+    public static final Font REGULAR_FONT = loadFont("/fonts/BeVietnamPro-Regular.ttf", Font.PLAIN);
+    public static final Font SEMIBOLD_FONT = loadFont("/fonts/BeVietnamPro-SemiBold.ttf", Font.PLAIN);
   private static Font loadFont(String resource, int style) {
     try (InputStream in = UiTheme.class.getResourceAsStream(resource)) {
       if (in != null) {
@@ -38,13 +38,13 @@ public final class UiTheme {
   public static final Color DANGER_RED = new Color(0xA8,0x2A,0x35);
   public static final Color WARNING_AMBER = new Color(0xE8,0xD9,0xB9);
   // Typography
-  public static final Font F_XL   = new Font("Segoe UI", Font.BOLD,  22);
-  public static final Font F_LG   = new Font("Segoe UI", Font.BOLD,  18);
-  public static final Font F_HEAD = new Font("Segoe UI", Font.BOLD,  15);
-  public static final Font F_BODY = new Font("Segoe UI", Font.PLAIN, 13);
-  public static final Font F_BODY_BOLD = new Font("Segoe UI", Font.BOLD, 13);
-  public static final Font F_SM   = new Font("Segoe UI", Font.PLAIN, 11);
-  public static final Font F_SM_BOLD = new Font("Segoe UI", Font.BOLD, 11);
+  public static final Font F_XL        = SEMIBOLD_FONT.deriveFont(22f);
+    public static final Font F_LG        = SEMIBOLD_FONT.deriveFont(18f);
+    public static final Font F_HEAD      = SEMIBOLD_FONT.deriveFont(15f);
+    public static final Font F_BODY      = REGULAR_FONT.deriveFont(13f);
+    public static final Font F_BODY_BOLD = SEMIBOLD_FONT.deriveFont(13f);
+    public static final Font F_SM        = REGULAR_FONT.deriveFont(11f);
+    public static final Font F_SM_BOLD   = SEMIBOLD_FONT.deriveFont(11f);
   // Arc radii
   public static final int ARC_SM = 10;
   public static final int ARC_MD = 14;
