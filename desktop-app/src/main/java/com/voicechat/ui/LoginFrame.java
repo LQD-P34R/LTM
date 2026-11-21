@@ -70,7 +70,7 @@ public final class LoginFrame extends JFrame {
         logoPanel.setMaximumSize(new Dimension(420, 58));
         logoPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        JLabel logoIcon = new JLabel("\uD83D\uDCAC"); // 💬
+        JLabel logoIcon = new JLabel(UiIcon.CHAT); // 💬
         logoIcon.setFont(new Font("Segoe UI", Font.PLAIN, 28));
         logoIcon.setForeground(Color.WHITE);
         logoPanel.add(logoIcon);
@@ -100,7 +100,7 @@ public final class LoginFrame extends JFrame {
 
         card.add(buildFieldGroup("Tên người dùng", tfUsername));
         card.add(Box.createVerticalStrut(12));
-        card.add(buildFieldGroup("Địa chỉ IP peer", tfIp));
+        card.add(buildFieldGroup("Địa chỉ IP máy chủ phòng", tfIp));
         card.add(Box.createVerticalStrut(12));
         card.add(buildFieldGroup("Cổng TCP", tfPort));
         card.add(Box.createVerticalStrut(20));
@@ -164,19 +164,19 @@ public final class LoginFrame extends JFrame {
 
         // Validate username
         if (username.isEmpty()) {
-            showError("⚠  Tên người dùng không được để trống.");
+            showError("Tên người dùng không được để trống.");
             tfUsername.requestFocusInWindow();
             return;
         }
         if (username.length() < 2) {
-            showError("⚠  Tên người dùng phải có ít nhất 2 ký tự.");
+            showError("Tên người dùng phải có ít nhất 2 ký tự.");
             tfUsername.requestFocusInWindow();
             return;
         }
 
         // Validate IP
         if (!ip.matches("^[\\w.:\\-]+$")) {
-            showError("⚠  Địa chỉ IP không hợp lệ.");
+            showError("Địa chỉ IP không hợp lệ.");
             tfIp.requestFocusInWindow();
             return;
         }
@@ -187,38 +187,32 @@ public final class LoginFrame extends JFrame {
             port = Integer.parseInt(portStr);
             if (port < 1 || port > 65535) throw new NumberFormatException();
         } catch (NumberFormatException ex) {
-            showError("⚠  Cổng phải là số nguyên từ 1 đến 65535.");
+            showError("Cổng phải là số nguyên từ 1 đến 65535.");
             tfPort.requestFocusInWindow();
             return;
         }
 
-        // Giả lập kết nối bằng SwingWorker
+        // Kết nối TCP ngoài luồng giao diện.
         setFormEnabled(false);
         progress.setVisible(true);
 
-        final String finalUsername = username;
-
-        new SwingWorker<Void, Void>() {
-            @Override
-            protected Void doInBackground() throws Exception {
-                /*
-                 * TODO (TV1 integration): thay dòng Thread.sleep bằng:
-                 *   AppCoordinator.getInstance().connect(finalIp, finalPort);
-                 */
-                Thread.sleep(600);
-                return null;
+        new SwingWorker<com.voicechat.group.GroupProtocol.View, Void>() {
+            private com.voicechat.group.GroupClient client;
+            @Override protected com.voicechat.group.GroupProtocol.View doInBackground() throws Exception {
+                client = com.voicechat.group.GroupClient.connect(username,ip,port);
+                return client.request("login",null,username,0);
             }
-
-            @Override
-            protected void done() {
+            @Override protected void done() {
                 progress.setVisible(false);
                 try {
-                    get();
-                    new ChatFrame(finalUsername).setVisible(true);
+                    var view = get();
+                    new ChatFrame(view.username(),client,view).setVisible(true);
                     dispose();
                 } catch (Exception ex) {
+                    if (client != null) client.close();
                     setFormEnabled(true);
-                    showError("⚠  Không thể kết nối: " + ex.getMessage());
+                    Throwable cause = ex.getCause()==null ? ex : ex.getCause();
+                    showError("Kết nối thất bại: " + cause.getMessage());
                 }
             }
         }.execute();

@@ -1,6 +1,6 @@
 # VoiceChatP2P - 4 Maven Modules (phan cong moi)
 
-> **Starter project, chua hoan chinh:** UI dang demo local, khong gui tin qua TCP, goi UDP chua duoc trien khai, SQLite chua luu du lieu.
+> Phần chat nhóm của Tùng đã nối giao diện VoiceLink với TCP và SQLite. Xem [cách chạy máy chủ, client và kiểm thử](chat-core/README.md).
 
 ## Phan cong
 

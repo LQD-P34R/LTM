@@ -64,7 +64,7 @@ public final class SidebarPanel extends JPanel {
         JPanel brandPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         brandPanel.setOpaque(false);
 
-        JLabel iconLbl = new JLabel("\uD83D\uDCAC"); // 💬
+        JLabel iconLbl = new JLabel(UiIcon.CHAT); // 💬
         iconLbl.setFont(new Font("Segoe UI", Font.PLAIN, 18));
         iconLbl.setForeground(UiUtils.C_PRIMARY);
 
@@ -79,6 +79,7 @@ public final class SidebarPanel extends JPanel {
         // Nút tròn tạo nhóm (+)
         UiUtils.RoundedButton addBtn = new UiUtils.RoundedButton(
                 "+", UiUtils.C_PRIMARY, Color.WHITE, 14);
+        addBtn.setBorder(BorderFactory.createEmptyBorder());
         addBtn.setPreferredSize(new Dimension(30, 30));
         addBtn.setFont(new Font("Segoe UI", Font.BOLD, 16));
         addBtn.setToolTipText("Tạo nhóm trò chuyện mới");
@@ -291,7 +292,9 @@ public final class SidebarPanel extends JPanel {
         ));
 
         UiUtils.RoundedButton historyBtn = new UiUtils.RoundedButton(
-                "\uD83D\uDCDC Lịch sử", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY, UiUtils.ARC_SM);
+                "Lịch sử", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY, UiUtils.ARC_SM);
+        historyBtn.setIcon(UiIcon.HISTORY);
+        historyBtn.setBorder(BorderFactory.createEmptyBorder(6,8,6,8));
         historyBtn.addActionListener(e -> {
             selectedItem = null;
             refreshPeerList(currentFilter());
@@ -318,6 +321,12 @@ public final class SidebarPanel extends JPanel {
 
     public void setRooms(List<RoomInfo> rooms) {
         this.allRooms = new ArrayList<>(rooms);
+        refreshRoomList(currentFilter());
+    }
+
+    public void selectRoom(RoomInfo room) {
+        selectedItem = room;
+        refreshPeerList(currentFilter());
         refreshRoomList(currentFilter());
     }
 

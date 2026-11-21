@@ -34,10 +34,10 @@ public final class CallPanel extends JPanel {
     private final JLabel timerLbl  = new JLabel("00:00", SwingConstants.CENTER);
 
     // Floating Control buttons
-    private final JButton btnMute    = createCircularBtn("\uD83C\uDFA4", "Tắt/Bật mic", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY); // 🎤
-    private final JButton btnSpeaker = createCircularBtn("\uD83D\uDD0A", "Loa ngoài", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY); // 🔊
-    private final JButton btnEnd     = createCircularBtn("\uD83D\uDCF5", "Kết thúc cuộc gọi", UiUtils.C_DANGER, Color.WHITE);             // 📵
-    private final JButton btnCancel  = createCircularBtn("\u2715", "Huỷ gọi", UiUtils.C_DANGER, Color.WHITE);                              // ✕
+    private final JButton btnMute    = createCircularBtn(UiIcon.MIC, "Tắt/Bật mic", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY); // 🎤
+    private final JButton btnSpeaker = createCircularBtn(UiIcon.SPEAKER, "Loa ngoài", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY); // 🔊
+    private final JButton btnEnd     = createCircularBtn(UiIcon.PHONE, "Kết thúc cuộc gọi", UiUtils.C_DANGER, Color.WHITE);             // 📵
+    private final JButton btnCancel  = createCircularBtn(UiIcon.CLOSE, "Huỷ gọi", UiUtils.C_DANGER, Color.WHITE);                              // ✕
 
     private final JPanel floatingBar = new UiUtils.RoundedPanel(
             UiUtils.ARC_XL, UiUtils.C_CARD_BG, UiUtils.C_BORDER, true);
@@ -104,7 +104,7 @@ public final class CallPanel extends JPanel {
         add(bottomWrap, BorderLayout.SOUTH);
     }
 
-    private static JButton createCircularBtn(String icon, String tooltip, Color bg, Color fg) {
+    private static JButton createCircularBtn(UiIcon icon, String tooltip, Color bg, Color fg) {
         JButton btn = new JButton(icon) {
             private boolean isHover = false;
             @Override
@@ -120,6 +120,7 @@ public final class CallPanel extends JPanel {
             }
         };
         btn.setFont(new Font("Segoe UI", Font.PLAIN, 18));
+        btn.setMargin(new Insets(0,0,0,0));
         btn.setForeground(fg);
         btn.setBackground(bg);
         btn.setPreferredSize(new Dimension(50, 50));

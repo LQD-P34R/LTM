@@ -22,11 +22,30 @@ public final class GroupChatPanel extends JPanel {
     }
 
     private final String        localUserId;
-    private final JPanel        messageContainer = new JPanel();
+    private final JPanel        messageContainer = new MessageList();
     private final JPanel        memberListPanel  = new JPanel();
     private JScrollPane         scrollPane;
     private JLabel              memberCountLbl;
     private final InputComposer composer;
+    private final UiUtils.RoundedButton membership = new UiUtils.RoundedButton(
+            "Tham gia", UiUtils.C_PRIMARY_LIGHT, UiUtils.C_PRIMARY, UiUtils.ARC_SM);
+    private java.util.Map<String,String> names = java.util.Map.of();
+    private boolean joined;
+    public void bindMembership(java.util.function.Consumer<Boolean> change) {
+        membership.setVisible(true);
+        membership.addActionListener(e -> change.accept(!joined));
+        showMembership(false);
+    }
+    public void showMembership(boolean value) {
+        joined = value;
+        membership.setText(value ? "Rời phòng" : "Tham gia");
+        composer.setVisible(value);
+    }
+    public void setDisplayNames(java.util.Map<String,String> names) { this.names = names; }
+    public void restoreDraft(String text) {
+        if (composer.getText().isEmpty()) composer.setText(text);
+    }
+
 
     public GroupChatPanel(RoomInfo room, String localUserId, ActionCallback callback) {
         this.localUserId = localUserId;
@@ -80,11 +99,15 @@ public final class GroupChatPanel extends JPanel {
         right.setOpaque(false);
 
         UiUtils.RoundedButton callGroupBtn = new UiUtils.RoundedButton(
-                "\uD83D\uDCDE  Gọi cả nhóm", UiUtils.C_PRIMARY, Color.WHITE, UiUtils.ARC_MD);
+                "Gọi cả nhóm", UiUtils.C_PRIMARY, Color.WHITE, UiUtils.ARC_MD);
+        callGroupBtn.setIcon(UiIcon.PHONE);
+        callGroupBtn.setBorder(BorderFactory.createEmptyBorder(6,8,6,8));
         callGroupBtn.setPreferredSize(new Dimension(130, 36));
 
         UiUtils.RoundedButton membersBtn = new UiUtils.RoundedButton(
-                "\uD83D\uDC65  Thành viên", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY, UiUtils.ARC_MD);
+                "Thành viên", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY, UiUtils.ARC_MD);
+        membersBtn.setIcon(UiIcon.GROUP);
+        membersBtn.setBorder(BorderFactory.createEmptyBorder(6,8,6,8));
         membersBtn.setPreferredSize(new Dimension(116, 36));
 
         membersBtn.addActionListener(e -> {
@@ -97,6 +120,8 @@ public final class GroupChatPanel extends JPanel {
 
         right.add(callGroupBtn);
         right.add(membersBtn);
+        membership.setVisible(false);
+        right.add(membership);
         header.add(right, BorderLayout.EAST);
 
         return header;
@@ -104,7 +129,6 @@ public final class GroupChatPanel extends JPanel {
 
     // ── Message area ──────────────────────────────────────────────
     private JScrollPane buildMessageArea() {
-        messageContainer.setLayout(new BoxLayout(messageContainer, BoxLayout.Y_AXIS));
         messageContainer.setBackground(UiUtils.C_APP_BG);
         messageContainer.setBorder(new EmptyBorder(12, 0, 12, 0));
 
@@ -151,12 +175,12 @@ public final class GroupChatPanel extends JPanel {
     public void setMembers(List<PeerInfo> members) {
         memberListPanel.removeAll();
         for (PeerInfo member : members) {
-            boolean isOnline = (Math.abs(member.username().hashCode()) % 3 != 0);
+
             JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
             row.setOpaque(false);
             row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
 
-            UiUtils.AvatarBadge av = new UiUtils.AvatarBadge(member.username(), 28, false, isOnline, true);
+            UiUtils.AvatarBadge av = new UiUtils.AvatarBadge(member.username(), 28, false, false, false);
             row.add(av);
 
             JLabel nameLbl = new JLabel(member.username());
@@ -172,7 +196,7 @@ public final class GroupChatPanel extends JPanel {
     }
 
     public void appendMessage(ChatMessage msg) {
-        ChatBubbleRenderer bubble = new ChatBubbleRenderer(msg, localUserId);
+        ChatBubbleRenderer bubble = new ChatBubbleRenderer(msg, localUserId, names.getOrDefault(msg.senderId(),msg.senderId()));
         bubble.setAlignmentX(Component.LEFT_ALIGNMENT);
         messageContainer.add(bubble);
         messageContainer.revalidate();
@@ -182,7 +206,7 @@ public final class GroupChatPanel extends JPanel {
     public void loadHistory(List<ChatMessage> history) {
         messageContainer.removeAll();
         for (ChatMessage msg : history) {
-            ChatBubbleRenderer bubble = new ChatBubbleRenderer(msg, localUserId);
+            ChatBubbleRenderer bubble = new ChatBubbleRenderer(msg, localUserId, names.getOrDefault(msg.senderId(),msg.senderId()));
             bubble.setAlignmentX(Component.LEFT_ALIGNMENT);
             messageContainer.add(bubble);
         }

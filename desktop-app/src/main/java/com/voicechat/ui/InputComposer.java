@@ -17,7 +17,7 @@ public final class InputComposer extends JPanel {
     }
 
     private final UiUtils.RoundedTextField inputField = new UiUtils.RoundedTextField("Nhập tin nhắn...", UiUtils.ARC_XL);
-    private final JButton btnEmoji = new JButton("\uD83D\uDE42"); // 🙂
+    private final JButton btnEmoji = new JButton(UiIcon.SMILE); // 🙂
     private final SendListener sendListener;
 
     public InputComposer(SendListener listener) {
@@ -37,6 +37,7 @@ public final class InputComposer extends JPanel {
 
     // ── Emoji button ──────────────────────────────────────────────
     private JButton buildEmojiButton() {
+        btnEmoji.setMargin(new Insets(0,0,0,0));
         btnEmoji.setFont(new Font("Segoe UI", Font.PLAIN, 20));
         btnEmoji.setForeground(UiUtils.C_TEXT_MUTED);
         btnEmoji.setBorderPainted(false);
@@ -63,7 +64,9 @@ public final class InputComposer extends JPanel {
 
         for (String em : emojis) {
             JButton eb = new JButton(em);
-            eb.setFont(new Font("Segoe UI", Font.PLAIN, 18));
+            eb.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 18));
+            eb.setMargin(new Insets(3,3,3,3));
+            if (eb.getFont().canDisplayUpTo(em.replace("\uFE0F","")) >= 0) continue;
             eb.setBorderPainted(false);
             eb.setFocusPainted(false);
             eb.setBackground(Color.WHITE);
@@ -110,13 +113,7 @@ public final class InputComposer extends JPanel {
 
                 // Vẽ mũi tên gửi giấy (Paper plane hoặc mũi tên)
                 g2.setColor(Color.WHITE);
-                g2.setFont(new Font("Segoe UI", Font.BOLD, 16));
-                FontMetrics fm = g2.getFontMetrics();
-                String arrow = "\u27A4"; // ➤
-                int tx = (getWidth() - fm.stringWidth(arrow)) / 2;
-                int ty = (getHeight() - fm.getHeight()) / 2 + fm.getAscent();
-                g2.drawString(arrow, tx, ty);
-
+                UiIcon.SEND.draw(g2,(getWidth()-20)/2,(getHeight()-20)/2,20,Color.WHITE);
                 g2.dispose();
             }
         };

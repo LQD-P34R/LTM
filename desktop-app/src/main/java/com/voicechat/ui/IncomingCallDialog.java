@@ -58,14 +58,14 @@ public final class IncomingCallDialog extends JDialog {
         btnRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
 
         UiUtils.RoundedButton acceptBtn = new UiUtils.RoundedButton(
-                "✓  Chấp nhận", UiUtils.C_ONLINE, Color.WHITE, UiUtils.ARC_MD);
+                "Chấp nhận", UiUtils.C_ONLINE, Color.WHITE, UiUtils.ARC_MD);
         acceptBtn.addActionListener(e -> {
             dispose();
             if (listener != null) listener.onAccepted();
         });
 
         UiUtils.RoundedButton rejectBtn = new UiUtils.RoundedButton(
-                "✕  Từ chối", UiUtils.C_DANGER, Color.WHITE, UiUtils.ARC_MD);
+                "Từ chối", UiUtils.C_DANGER, Color.WHITE, UiUtils.ARC_MD);
         rejectBtn.addActionListener(e -> {
             dispose();
             if (listener != null) listener.onRejected();

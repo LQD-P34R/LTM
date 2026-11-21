@@ -22,7 +22,7 @@ public final class DirectChatPanel extends JPanel {
     }
 
     private final String        localUserId;
-    private final JPanel        messageContainer = new JPanel();
+    private final JPanel        messageContainer = new MessageList();
     private JScrollPane         scrollPane;
     private final InputComposer composer;
 
@@ -75,7 +75,9 @@ public final class DirectChatPanel extends JPanel {
 
         // Bên phải: Nút gọi thoại bo tròn
         UiUtils.RoundedButton callBtn = new UiUtils.RoundedButton(
-                "\uD83D\uDCDE  Gọi thoại", UiUtils.C_ONLINE, Color.WHITE, UiUtils.ARC_MD);
+                "Gọi thoại", UiUtils.C_ONLINE, Color.WHITE, UiUtils.ARC_MD);
+        callBtn.setIcon(UiIcon.PHONE);
+        callBtn.setBorder(BorderFactory.createEmptyBorder(6,8,6,8));
         callBtn.setPreferredSize(new Dimension(116, 36));
         callBtn.addActionListener(e -> {
             if (callback != null) callback.onCallRequested(peer);
@@ -87,7 +89,6 @@ public final class DirectChatPanel extends JPanel {
 
     // ── Message area ──────────────────────────────────────────────
     private JScrollPane buildMessageArea() {
-        messageContainer.setLayout(new BoxLayout(messageContainer, BoxLayout.Y_AXIS));
         messageContainer.setBackground(UiUtils.C_APP_BG);
         messageContainer.setBorder(new EmptyBorder(12, 0, 12, 0));
 

@@ -1,0 +1,1496 @@
+diff --git a/README.md b/README.md
+index 3330b32..baa9ec4 100644
+--- a/README.md
++++ b/README.md
+@@ -1,6 +1,6 @@
+ # VoiceChatP2P - 4 Maven Modules (phan cong moi)
+ 
+-> **Starter project, chua hoan chinh:** UI dang demo local, khong gui tin qua TCP, goi UDP chua duoc trien khai, SQLite chua luu du lieu.
++> Phần chat nhóm của Tùng đã nối giao diện VoiceLink với TCP và SQLite. Xem [cách chạy máy chủ, client và kiểm thử](chat-core/README.md).
+ 
+ ## Phan cong
+ 
+diff --git a/chat-core/README.md b/chat-core/README.md
+index e65612b..3fab668 100644
+--- a/chat-core/README.md
++++ b/chat-core/README.md
+@@ -1,10 +1,32 @@
+-# Module 4: chat-core — Thanh vien 4 (CHAT)
++# Phần Minh Tùng – Người dùng, phòng nhóm và lịch sử
+ 
+-- `chat/ChatController.java`: dong goi lenh gui chat qua `NetworkGateway`.
+-- `chat/ChatService.java`: xu ly nghiep vu tin nhan, goi `HistoryStore`, xu ly tin nhan nhan vao (TODO).
+-- `database/DatabaseManager.java`: ket noi SQLite (can them sqlite-jdbc khi trien khai).
+-- `database/HistoryRepository.java`: luu/doc lich su chat (TODO).
+-- Tuyet doi KHONG import Java Swing trong module chat.
+-- Phan quan ly nguoi dung/phong (`management/`) da chuyen sang phan viec CHUNG, khong thuoc TV4.
++Đăng nhập tại LoginFrame của VoiceLink. ChatFrame dùng SidebarPanel để chọn phòng,
++GroupChatPanel để hiển thị thành viên/tin nhắn và HistoryPanel để xem lịch sử.
++Các thao tác nhóm sử dụng NetworkGateway của Sơn. GroupHost giữ một file SQLite
++dùng chung cho các client. Mỗi máy khách lấy cập nhật khoảng 1,8 giây một lần.
+ 
+-Build: `mvn -pl chat-core -am compile` tu thu muc goc.
++- DatabaseManager tạo users, rooms, members và messages.
++- UserManager quản lý tên hiển thị theo ID ổn định. RoomManager tạo phòng và quản lý thành viên.
++- GroupClient gửi yêu cầu qua TCP. GroupHost kiểm tra thành viên trước khi ghi hay đọc.
++- HistoryRepository truy vấn trang 30 tin. Mục Lịch sử gồm các phòng người dùng hiện đang tham gia.
++- GroupSmoke dùng máy chủ thật, ba client và SQLite tạm để kiểm tra luồng qua TCP.
++
++Từ thư mục gốc của repo, dùng JDK 21 và Maven:
++
++```powershell
++mvn clean package
++java -cp "desktop-app/target/test-classes;desktop-app/target/desktop-app-1.0-SNAPSHOT-all.jar" com.voicechat.group.GroupSmoke
++java -cp desktop-app/target/desktop-app-1.0-SNAPSHOT-all.jar com.voicechat.group.GroupHost 5000
++```
++
++Giữ máy chủ mở. Mở một Terminal mới cho mỗi người dùng:
++
++```powershell
++java -jar desktop-app/target/desktop-app-1.0-SNAPSHOT-all.jar
++```
++
++Nhập IP máy chủ (127.0.0.1 khi chạy cùng laptop), cổng 5000 và tên hồ sơ riêng.
++Tạo nhóm ở sidebar. Người thứ hai chọn nhóm, nhấn Tham gia rồi nhắn tin.
++Bấm Lịch sử để đọc các trang cũ. Đổi tên thay tên hiển thị. Khi đăng nhập lại
++dùng tên hồ sơ ban đầu trên cùng tài khoản hệ điều hành. Máy chủ dùng voicechat.db
++trong thư mục chạy, có thể chọn file bằng thuộc tính JVM voicechat.db.
+diff --git a/chat-core/pom.xml b/chat-core/pom.xml
+index 926f763..7cf0b45 100644
+--- a/chat-core/pom.xml
++++ b/chat-core/pom.xml
+@@ -16,5 +16,15 @@
+             <artifactId>network-core</artifactId>
+             <version>${project.version}</version>
+         </dependency>
++        <dependency>
++            <groupId>org.xerial</groupId>
++            <artifactId>sqlite-jdbc</artifactId>
++            <version>3.47.1.0</version>
++        </dependency>
++        <dependency>
++            <groupId>com.fasterxml.jackson.core</groupId>
++            <artifactId>jackson-databind</artifactId>
++            <version>2.16.0</version>
++        </dependency>
+     </dependencies>
+ </project>
+diff --git a/chat-core/src/main/java/com/voicechat/database/DatabaseManager.java b/chat-core/src/main/java/com/voicechat/database/DatabaseManager.java
+index f72f9b6..019fa02 100644
+--- a/chat-core/src/main/java/com/voicechat/database/DatabaseManager.java
++++ b/chat-core/src/main/java/com/voicechat/database/DatabaseManager.java
+@@ -1,13 +1,64 @@
+ package com.voicechat.database;
+ 
+-import java.sql.Connection;
+-import java.sql.DriverManager;
+-import java.sql.SQLException;
++import java.sql.*;
++import java.util.ArrayList;
++import java.util.List;
+ 
+-/** TV4: them SQLite JDBC dependency vao pom.xml truoc khi ket noi. */
++/** One transaction per operation. Foreign keys are enabled on every connection. */
+ public final class DatabaseManager {
+-    private DatabaseManager() { }
+-    public static Connection open(String filePath) throws SQLException {
+-        return DriverManager.getConnection("jdbc:sqlite:" + filePath);
++    private final String file;
++    public DatabaseManager() { this(System.getProperty("voicechat.db", "voicechat.db")); }
++    public DatabaseManager(String file) {
++        this.file = file;
++        transaction(c -> {
++            try (var s = c.createStatement()) {
++                s.executeUpdate("CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, username TEXT NOT NULL, name_key TEXT NOT NULL UNIQUE, host TEXT, tcp INTEGER, udp INTEGER, active INTEGER NOT NULL)");
++                s.executeUpdate("CREATE TABLE IF NOT EXISTS rooms(id TEXT PRIMARY KEY, name TEXT NOT NULL, owner TEXT NOT NULL REFERENCES users(id))");
++                s.executeUpdate("CREATE TABLE IF NOT EXISTS members(room TEXT REFERENCES rooms(id), peer TEXT REFERENCES users(id), PRIMARY KEY(room,peer))");
++                s.executeUpdate("CREATE TABLE IF NOT EXISTS messages(seq INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, room TEXT NOT NULL, sender TEXT NOT NULL, body TEXT NOT NULL, sent_at TEXT NOT NULL)");
++                s.executeUpdate("CREATE INDEX IF NOT EXISTS messages_room_seq ON messages(room,seq)");
++            }
++            return null;
++        });
++    }
++    public static Connection open(String file) throws SQLException {
++        var c = DriverManager.getConnection("jdbc:sqlite:" + file);
++        try (var s = c.createStatement()) {
++            s.execute("PRAGMA foreign_keys=ON");
++            s.execute("PRAGMA busy_timeout=5000");
++        } catch (SQLException e) { c.close(); throw e; }
++        return c;
++    }
++    public interface Work<T> { T run(Connection c) throws SQLException; }
++    public interface Row<T> { T read(ResultSet r) throws SQLException; }
++    public <T> T transaction(Work<T> work) {
++        try (var c = open(file)) {
++            c.setAutoCommit(false);
++            try {
++                T value = work.run(c);
++                c.commit();
++                return value;
++            } catch (SQLException | RuntimeException e) { c.rollback(); throw e; }
++        } catch (SQLException e) { throw new IllegalStateException("SQLite: " + e.getMessage(), e); }
++    }
++    private static PreparedStatement prepare(Connection c, String sql, Object[] args) throws SQLException {
++        var p = c.prepareStatement(sql);
++        for (int i = 0; i < args.length; i++) p.setObject(i+1, args[i]);
++        return p;
++    }
++    public static int update(Connection c, String sql, Object... args) throws SQLException {
++        try (var p = prepare(c, sql, args)) { return p.executeUpdate(); }
++    }
++    public static <T> List<T> query(Connection c, String sql, Row<T> row, Object... args) throws SQLException {
++        try (var p = prepare(c, sql, args); var r = p.executeQuery()) {
++            var result = new ArrayList<T>();
++            while (r.next()) result.add(row.read(r));
++            return result;
++        }
++    }
++    public static String label(String value, int max) {
++        if (value == null || value.isBlank() || value.strip().length() > max)
++            throw new IllegalArgumentException("Nội dung phải dài từ 1 đến " + max + " ký tự.");
++        return value.strip();
+     }
+ }
+diff --git a/chat-core/src/main/java/com/voicechat/database/HistoryRepository.java b/chat-core/src/main/java/com/voicechat/database/HistoryRepository.java
+index d9e5e11..2c70502 100644
+--- a/chat-core/src/main/java/com/voicechat/database/HistoryRepository.java
++++ b/chat-core/src/main/java/com/voicechat/database/HistoryRepository.java
+@@ -2,14 +2,42 @@ package com.voicechat.database;
+ 
+ import com.voicechat.common.api.HistoryStore;
+ import com.voicechat.common.model.ChatMessage;
++import java.time.Instant;
++import java.sql.*;
+ import java.util.List;
++import static com.voicechat.database.DatabaseManager.*;
+ 
+-/** TV4 TODO: create tables, INSERT, SELECT qua JDBC. */
+ public final class HistoryRepository implements HistoryStore {
+-    @Override public void save(ChatMessage message) {
+-        throw new UnsupportedOperationException("TV4 TODO: persist chat message");
++    private final DatabaseManager db;
++    public HistoryRepository() { this(new DatabaseManager()); }
++    public HistoryRepository(DatabaseManager db) { this.db = db; }
++
++    @Override public void save(ChatMessage m) {
++        db.transaction(c -> update(c, "INSERT INTO messages(id,room,sender,body,sent_at) VALUES(?,?,?,?,?) ON CONFLICT(id) DO NOTHING",
++                m.id(), m.roomId(), m.senderId(), label(m.text(), 1000), m.sentAt().toString()));
++    }
++    private ChatMessage message(ResultSet r) throws SQLException {
++        return new ChatMessage(r.getString("id"),r.getString("room"),r.getString("sender"),
++                r.getString("body"), Instant.parse(r.getString("sent_at")));
+     }
+-    @Override public List<ChatMessage> findByRoom(String roomId) {
+-        throw new UnsupportedOperationException("TV4 TODO: read history");
++    @Override public List<ChatMessage> findByRoom(String room) {
++        return db.transaction(c -> query(c,"SELECT * FROM messages WHERE room=? ORDER BY seq",this::message,room));
++    }
++    public record Line(String id,String senderId,String sender,String roomName,String text,String at) {}
++    public record Page(List<Line> lines, boolean hasOlder) {}
++
++    /** Null room selects history across all rooms that the viewer currently belongs to. */
++    public Page readPage(String viewer,String room,int page) {
++        if (page < 0) throw new IllegalArgumentException("Trang không hợp lệ.");
++        List<Line> rows = db.transaction(c -> query(c,
++                """
++                SELECT m.id, m.sender, u.username, r.name, m.body, m.sent_at
++                FROM messages m JOIN users u ON u.id=m.sender JOIN rooms r ON r.id=m.room
++                JOIN members me ON me.room=m.room AND me.peer=?
++                WHERE (? IS NULL OR m.room=?) ORDER BY m.seq DESC LIMIT 31 OFFSET ?
++                """, rs -> new Line(rs.getString(1),rs.getString(2),rs.getString(3),
++                        rs.getString(4),rs.getString(5),rs.getString(6)),viewer,room,room,30L*page));
++        boolean hasOlder = rows.size()>30;
++        return new Page(List.copyOf(rows.subList(0,Math.min(30,rows.size())).reversed()),hasOlder);
+     }
+ }
+diff --git a/chat-core/src/main/java/com/voicechat/group/GroupClient.java b/chat-core/src/main/java/com/voicechat/group/GroupClient.java
+new file mode 100644
+index 0000000..8d037b8
+--- /dev/null
++++ b/chat-core/src/main/java/com/voicechat/group/GroupClient.java
+@@ -0,0 +1,62 @@
++package com.voicechat.group;
++
++import com.voicechat.common.api.NetworkGateway;
++import com.voicechat.common.model.ControlMessage;
++import java.io.IOException;
++import java.time.Instant;
++import java.util.UUID;
++import java.util.concurrent.*;
++import static com.voicechat.group.GroupProtocol.*;
++
++public final class GroupClient implements AutoCloseable {
++    private final String id;
++    private final NetworkGateway wire;
++    private final ConcurrentMap<String,CompletableFuture<Reply>> pending = new ConcurrentHashMap<>();
++    public GroupClient(String id,NetworkGateway wire) {
++        this.id = id;
++        this.wire = wire;
++        wire.onControlMessage(this::receive);
++    }
++    public String localId() { return id; }
++
++    public static GroupClient connect(String profile,String host,int port) throws Exception {
++        var prefs = java.util.prefs.Preferences.userNodeForPackage(GroupClient.class);
++        String key = UUID.nameUUIDFromBytes(profile.getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
++        String id = prefs.get(key,null);
++        if (id == null) {
++            id = UUID.randomUUID().toString();
++            prefs.put(key,id);
++            prefs.flush();
++        }
++        var manager = new com.voicechat.network.PeerManager(id);
++        var client = new GroupClient(id,manager);
++        try {
++            manager.connect(host,port);
++            return client;
++        } catch (Exception e) { client.close(); throw e; }
++    }
++
++    private void receive(ControlMessage m) {
++        if (!HOST.equals(m.senderId()) || !id.equals(m.targetId()) || m.type()!=ControlMessage.Type.ROOM_MEMBERS) return;
++        try {
++            Reply reply = JSON.readValue(m.payload(),Reply.class);
++            var future = pending.get(reply.id());
++            if (future != null) future.complete(reply);
++        } catch (IOException e) { System.err.println("Phản hồi sai định dạng: " + e.getMessage()); }
++    }
++    public View request(String action,String room,String value,int page) throws Exception {
++        String key = UUID.randomUUID().toString();
++        var future = new CompletableFuture<Reply>();
++        pending.put(key,future);
++        try {
++            wire.sendControl(HOST,new ControlMessage(type(action),id,HOST,room,
++                    JSON.writeValueAsString(new Request(key,action,value,page)),Instant.now()));
++            Reply reply;
++            try { reply = future.get(6,TimeUnit.SECONDS); }
++            catch (TimeoutException e) { throw new IOException("Máy chủ chưa xác nhận. Hãy tải lại phòng để kiểm tra.",e); }
++            if (reply.error()!=null) throw new IOException(reply.error());
++            return reply.view();
++        } finally { pending.remove(key); }
++    }
++    public void close() { wire.disconnect(); }
++}
+diff --git a/chat-core/src/main/java/com/voicechat/group/GroupProtocol.java b/chat-core/src/main/java/com/voicechat/group/GroupProtocol.java
+new file mode 100644
+index 0000000..590e2b9
+--- /dev/null
++++ b/chat-core/src/main/java/com/voicechat/group/GroupProtocol.java
+@@ -0,0 +1,25 @@
++package com.voicechat.group;
++
++import com.fasterxml.jackson.databind.ObjectMapper;
++import com.voicechat.common.model.*;
++import java.util.List;
++import com.voicechat.database.HistoryRepository.Line;
++
++/** Payloads are JSON inside TV1's existing framed ControlMessage. */
++public final class GroupProtocol {
++    static final String HOST = "ltm-room-host";
++    static final ObjectMapper JSON = new ObjectMapper();
++    public record Request(String id,String action,String value,int page) {}
++    public record View(String username,List<RoomInfo> rooms,String room,boolean joined,List<PeerInfo> members,List<Line> history,boolean hasOlder) {}
++    public record Reply(String id,String error,View view) {}
++    static ControlMessage.Type type(String action) {
++        return switch(action) {
++            case "create" -> ControlMessage.Type.ROOM_CREATE;
++            case "join" -> ControlMessage.Type.ROOM_JOIN;
++            case "leave" -> ControlMessage.Type.ROOM_LEAVE;
++            case "send" -> ControlMessage.Type.CHAT;
++            default -> ControlMessage.Type.ROOM_MEMBERS;
++        };
++    }
++    private GroupProtocol() {}
++}
+diff --git a/desktop-app/src/main/java/com/voicechat/group/GroupHost.java b/desktop-app/src/main/java/com/voicechat/group/GroupHost.java
+new file mode 100644
+index 0000000..6013081
+--- /dev/null
++++ b/desktop-app/src/main/java/com/voicechat/group/GroupHost.java
+@@ -0,0 +1,87 @@
++package com.voicechat.group;
++
++import com.voicechat.common.api.NetworkGateway;
++import com.voicechat.common.model.*;
++import com.voicechat.database.*;
++import com.voicechat.management.*;
++import com.voicechat.network.PeerManager;
++import java.io.IOException;
++import java.time.Instant;
++import java.util.*;
++import static com.voicechat.group.GroupProtocol.*;
++
++public final class GroupHost {
++    private final UserManager users;
++    private final RoomManager rooms;
++    private final HistoryRepository history;
++    private final DatabaseManager db;
++    private final NetworkGateway wire;
++
++    public GroupHost(NetworkGateway wire, DatabaseManager db) {
++        this.wire = wire;
++        this.db = db;
++        users = new UserManager(db);
++        rooms = new RoomManager(db);
++        history = new HistoryRepository(db);
++    }
++
++    public synchronized void receive(ControlMessage m) {
++        if (!HOST.equals(m.targetId()) || m.senderId() == null) return;
++        String requestId = "";
++        Reply reply;
++        try {
++            Request q = JSON.readValue(m.payload(),Request.class);
++            requestId = UUID.fromString(q.id()).toString();
++            if (type(q.action()) != m.type()) throw new IllegalArgumentException("Sai loại yêu cầu.");
++            reply = new Reply(requestId,null,apply(m.senderId(),m.roomId(),q));
++        } catch (Exception e) { reply = new Reply(requestId,Objects.toString(e.getMessage(),"Yêu cầu không hợp lệ."),null); }
++        try {
++            wire.sendControl(m.senderId(),new ControlMessage(ControlMessage.Type.ROOM_MEMBERS,HOST,
++                    m.senderId(),m.roomId(),JSON.writeValueAsString(reply),Instant.now()));
++        } catch (IOException e) { System.err.println("Không gửi được phản hồi: " + e.getMessage()); }
++    }
++
++    private View apply(String id,String room,Request q) {
++        String username = db.transaction(c -> DatabaseManager.query(c,
++                "SELECT username FROM users WHERE id=?",r -> r.getString(1),id).stream().findFirst().orElse(null));
++        if (username == null && !q.action().equals("login"))
++            throw new IllegalArgumentException("Hãy đăng nhập trước.");
++        if (username == null || q.action().equals("rename")) {
++            username = DatabaseManager.label(q.value(),40);
++            users.addPeer(new PeerInfo(id,username,"",0,0));
++        }
++        if (room == null && Set.of("join","leave","send").contains(q.action()))
++            throw new IllegalArgumentException("Hãy chọn một phòng trước.");
++        switch (q.action()) {
++            case "login","rename","view","history" -> { }
++            case "create" -> room = rooms.createRoom(q.value(),id).id();
++            case "join" -> rooms.joinRoom(room,new PeerInfo(id,"","",0,0));
++            case "leave" -> rooms.leaveRoom(room,id);
++            case "send" -> {
++                if (!isMember(room,id)) throw new IllegalArgumentException("Bạn cần tham gia phòng trước khi gửi.");
++                history.save(new ChatMessage(id + "/" + q.id(),room,id,q.value(),Instant.now()));
++            }
++            default -> throw new IllegalArgumentException("Thao tác không hợp lệ.");
++        }
++        List<PeerInfo> peers = room == null ? List.of() : rooms.getMembers(room);
++        boolean joined = peers.stream().anyMatch(p -> p.id().equals(id));
++        boolean allRooms = q.action().equals("history");
++        var page = (joined || allRooms) ? history.readPage(id,allRooms ? null : room,q.page())
++                : new HistoryRepository.Page(List.of(),false);
++        return new View(username,rooms.listRooms(),room,joined,
++                joined ? peers : List.of(),page.lines(),page.hasOlder());
++    }
++
++    private boolean isMember(String room,String id) {
++        return rooms.getMembers(room).stream().anyMatch(p -> p.id().equals(id));
++    }
++    public static void main(String[] args) throws Exception {
++        int port = args.length == 0 ? 5000 : Integer.parseInt(args[0]);
++        var wire = new PeerManager(HOST);
++        var host = new GroupHost(wire,new DatabaseManager());
++        wire.onControlMessage(host::receive);
++        Runtime.getRuntime().addShutdownHook(new Thread(wire::disconnect));
++        System.out.println("Máy chủ phòng chat đang nghe TCP " + wire.startListening(port,0));
++        new java.util.concurrent.CountDownLatch(1).await();
++    }
++}
+diff --git a/desktop-app/src/main/java/com/voicechat/management/RoomManager.java b/desktop-app/src/main/java/com/voicechat/management/RoomManager.java
+index 86e5276..ffd9a1b 100644
+--- a/desktop-app/src/main/java/com/voicechat/management/RoomManager.java
++++ b/desktop-app/src/main/java/com/voicechat/management/RoomManager.java
+@@ -1,25 +1,33 @@
+ package com.voicechat.management;
+ 
+ import com.voicechat.common.api.RoomGateway;
+-import com.voicechat.common.model.PeerInfo;
+-import com.voicechat.common.model.RoomInfo;
+-import java.util.List;
++import com.voicechat.common.model.*;
++import com.voicechat.database.DatabaseManager;
++import java.util.*;
++import static com.voicechat.database.DatabaseManager.*;
+ 
+-/**
+- * SHARED - CA NHOM: Quan ly phong, thanh vien va dong bo trang thai.
+- * Hien tai chi la skeleton, chua dong bo qua mang.
+- */
+ public final class RoomManager implements RoomGateway {
+-    @Override public RoomInfo createRoom(String name, String ownerPeerId) {
+-        throw new UnsupportedOperationException("TEAM TODO: create room + notify peers");
++    private final DatabaseManager db;
++    public RoomManager() { this(new DatabaseManager()); }
++    public RoomManager(DatabaseManager db) { this.db = db; }
++    public RoomInfo createRoom(String name,String owner) {
++        var room = new RoomInfo(UUID.randomUUID().toString(),label(name,80),owner);
++        return db.transaction(c -> {
++            update(c,"INSERT INTO rooms VALUES(?,?,?)",room.id(),room.name(),owner);
++            update(c,"INSERT INTO members VALUES(?,?)",room.id(),owner);
++            return room;
++        });
+     }
+-    @Override public void joinRoom(String roomId, PeerInfo peer) {
+-        throw new UnsupportedOperationException("TEAM TODO: join room + sync peers");
++    public void joinRoom(String room,PeerInfo peer) {
++        db.transaction(c -> update(c,"INSERT INTO members VALUES(?,?) ON CONFLICT DO NOTHING",room,peer.id()));
+     }
+-    @Override public void leaveRoom(String roomId, String peerId) {
+-        throw new UnsupportedOperationException("TEAM TODO: leave room + sync peers");
++    public void leaveRoom(String room,String id) {
++        db.transaction(c -> update(c,"DELETE FROM members WHERE room=? AND peer=?",room,id));
+     }
+-    @Override public List<PeerInfo> getMembers(String roomId) {
+-        throw new UnsupportedOperationException("TEAM TODO: query room members");
++    public List<PeerInfo> getMembers(String room) {
++        return db.transaction(c -> query(c,"SELECT u.* FROM users u JOIN members m ON m.peer=u.id WHERE m.room=? ORDER BY name_key",UserManager::peer,room));
++    }
++    public List<RoomInfo> listRooms() {
++        return db.transaction(c -> query(c,"SELECT * FROM rooms ORDER BY name,id",r -> new RoomInfo(r.getString(1),r.getString(2),r.getString(3))));
+     }
+ }
+diff --git a/desktop-app/src/main/java/com/voicechat/management/UserManager.java b/desktop-app/src/main/java/com/voicechat/management/UserManager.java
+index 8b15192..cd851e6 100644
+--- a/desktop-app/src/main/java/com/voicechat/management/UserManager.java
++++ b/desktop-app/src/main/java/com/voicechat/management/UserManager.java
+@@ -1,17 +1,31 @@
+ package com.voicechat.management;
+ 
+ import com.voicechat.common.model.PeerInfo;
+-import java.util.List;
++import com.voicechat.database.DatabaseManager;
++import java.sql.*;
++import java.util.*;
++import static com.voicechat.database.DatabaseManager.*;
+ 
+-/** SHARED - CA NHOM: Theo doi session/username va danh sach peer. */
+ public final class UserManager {
++    final DatabaseManager db;
++    public UserManager() { this(new DatabaseManager()); }
++    public UserManager(DatabaseManager db) { this.db = db; }
++
+     public void addPeer(PeerInfo peer) {
+-        throw new UnsupportedOperationException("TEAM TODO: register peer");
++        String name = label(peer.username(), 40);
++        String key = java.text.Normalizer.normalize(name, java.text.Normalizer.Form.NFC).toLowerCase(Locale.ROOT);
++        db.transaction(c -> {
++            if (!query(c,"SELECT id FROM users WHERE name_key=? AND id<>?",r -> r.getString(1),key,peer.id()).isEmpty())
++                throw new IllegalArgumentException("Tên này đã có người dùng.");
++            return update(c,"INSERT INTO users VALUES(?,?,?,?,?,?,1) ON CONFLICT(id) DO UPDATE SET username=excluded.username,name_key=excluded.name_key,host=excluded.host,tcp=excluded.tcp,udp=excluded.udp,active=1",
++                    peer.id(),name,key,peer.host(),peer.tcpPort(),peer.udpPort());
++        });
+     }
+-    public void removePeer(String peerId) {
+-        throw new UnsupportedOperationException("TEAM TODO: unregister peer");
++    public void removePeer(String id) { db.transaction(c -> update(c,"UPDATE users SET active=0 WHERE id=?",id)); }
++    static PeerInfo peer(ResultSet r) throws SQLException {
++        return new PeerInfo(r.getString("id"),r.getString("username"),r.getString("host"),r.getInt("tcp"),r.getInt("udp"));
+     }
+     public List<PeerInfo> listPeers() {
+-        throw new UnsupportedOperationException("TEAM TODO: list peers");
++        return db.transaction(c -> query(c,"SELECT * FROM users WHERE active=1 ORDER BY name_key",UserManager::peer));
+     }
+ }
+diff --git a/desktop-app/src/main/java/com/voicechat/ui/CallPanel.java b/desktop-app/src/main/java/com/voicechat/ui/CallPanel.java
+index 0b64ca8..e712a1b 100644
+--- a/desktop-app/src/main/java/com/voicechat/ui/CallPanel.java
++++ b/desktop-app/src/main/java/com/voicechat/ui/CallPanel.java
+@@ -34,10 +34,10 @@ public final class CallPanel extends JPanel {
+     private final JLabel timerLbl  = new JLabel("00:00", SwingConstants.CENTER);
+ 
+     // Floating Control buttons
+-    private final JButton btnMute    = createCircularBtn("\uD83C\uDFA4", "Tắt/Bật mic", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY); // 🎤
+-    private final JButton btnSpeaker = createCircularBtn("\uD83D\uDD0A", "Loa ngoài", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY); // 🔊
+-    private final JButton btnEnd     = createCircularBtn("\uD83D\uDCF5", "Kết thúc cuộc gọi", UiUtils.C_DANGER, Color.WHITE);             // 📵
+-    private final JButton btnCancel  = createCircularBtn("\u2715", "Huỷ gọi", UiUtils.C_DANGER, Color.WHITE);                              // ✕
++    private final JButton btnMute    = createCircularBtn(UiIcon.MIC, "Tắt/Bật mic", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY); // 🎤
++    private final JButton btnSpeaker = createCircularBtn(UiIcon.SPEAKER, "Loa ngoài", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY); // 🔊
++    private final JButton btnEnd     = createCircularBtn(UiIcon.PHONE, "Kết thúc cuộc gọi", UiUtils.C_DANGER, Color.WHITE);             // 📵
++    private final JButton btnCancel  = createCircularBtn(UiIcon.CLOSE, "Huỷ gọi", UiUtils.C_DANGER, Color.WHITE);                              // ✕
+ 
+     private final JPanel floatingBar = new UiUtils.RoundedPanel(
+             UiUtils.ARC_XL, UiUtils.C_CARD_BG, UiUtils.C_BORDER, true);
+@@ -104,7 +104,7 @@ public final class CallPanel extends JPanel {
+         add(bottomWrap, BorderLayout.SOUTH);
+     }
+ 
+-    private static JButton createCircularBtn(String icon, String tooltip, Color bg, Color fg) {
++    private static JButton createCircularBtn(UiIcon icon, String tooltip, Color bg, Color fg) {
+         JButton btn = new JButton(icon) {
+             private boolean isHover = false;
+             @Override
+@@ -120,6 +120,7 @@ public final class CallPanel extends JPanel {
+             }
+         };
+         btn.setFont(new Font("Segoe UI", Font.PLAIN, 18));
++        btn.setMargin(new Insets(0,0,0,0));
+         btn.setForeground(fg);
+         btn.setBackground(bg);
+         btn.setPreferredSize(new Dimension(50, 50));
+diff --git a/desktop-app/src/main/java/com/voicechat/ui/ChatBubbleRenderer.java b/desktop-app/src/main/java/com/voicechat/ui/ChatBubbleRenderer.java
+index b452fae..270a1c9 100644
+--- a/desktop-app/src/main/java/com/voicechat/ui/ChatBubbleRenderer.java
++++ b/desktop-app/src/main/java/com/voicechat/ui/ChatBubbleRenderer.java
+@@ -20,9 +20,20 @@ public final class ChatBubbleRenderer extends JPanel {
+ 
+     private static final int BUBBLE_ARC = 16;
+ 
++    private final JTextArea body = new JTextArea();
++    private final boolean outgoing;
++    private int naturalWidth;
++    private int metadataWidth;
++    private int measuredWidth = -1;
++
+     public ChatBubbleRenderer(ChatMessage msg, String localUserId) {
++        this(msg, localUserId, msg.senderId());
++    }
++
++    public ChatBubbleRenderer(ChatMessage msg, String localUserId, String displayName) {
+         boolean isMine = msg.senderId().equals(localUserId);
+ 
++        outgoing = isMine;
+         setLayout(new BorderLayout());
+         setOpaque(false);
+         setBorder(new EmptyBorder(4, 16, 4, 16));
+@@ -33,15 +44,32 @@ public final class ChatBubbleRenderer extends JPanel {
+ 
+         // Nếu là tin nhắn của người khác, hiển thị thêm avatar nhỏ bên trái
+         if (!isMine) {
+-            UiUtils.AvatarBadge avatar = new UiUtils.AvatarBadge(msg.senderId(), 28, false, false, false);
++            UiUtils.AvatarBadge avatar = new UiUtils.AvatarBadge(displayName, 28, false, false, false);
+             row.add(avatar);
+         }
+ 
+-        row.add(buildBubble(msg, isMine));
++        row.add(buildBubble(msg, isMine, displayName));
+         add(row, BorderLayout.CENTER);
+     }
+ 
+-    private JPanel buildBubble(ChatMessage msg, boolean isMine) {
++    @Override public Dimension getMaximumSize() {
++        return new Dimension(Integer.MAX_VALUE,getPreferredSize().height);
++    }
++
++    void fitTo(int rowWidth) {
++        // Reserve row insets, FlowLayout gaps and the optional incoming avatar.
++        int available = Math.max(1,rowWidth-48-(outgoing ? 0 : 36));
++        int cap = Math.max(1,Math.min(available,Math.round(rowWidth*0.74f))-28);
++        int width = Math.min(cap,Math.max(naturalWidth,metadataWidth));
++        if (width == measuredWidth) return;
++        measuredWidth = width;
++        body.setPreferredSize(null);
++        body.setSize(width,Short.MAX_VALUE);
++        body.setPreferredSize(new Dimension(width,body.getPreferredSize().height));
++        invalidate();
++    }
++
++    private JPanel buildBubble(ChatMessage msg, boolean isMine, String displayName) {
+         JPanel bubble = new JPanel(new BorderLayout(0, 3)) {
+             @Override
+             protected void paintComponent(Graphics g) {
+@@ -71,24 +99,27 @@ public final class ChatBubbleRenderer extends JPanel {
+ 
+         // Tên người gửi (cho tin nhắn của người khác)
+         if (!isMine) {
+-            JLabel senderLbl = new JLabel(msg.senderId());
++            JLabel senderLbl = new JLabel(displayName);
+             senderLbl.setFont(UiUtils.F_SMALL_BOLD);
+-            senderLbl.setForeground(UiUtils.avatarColorFor(msg.senderId()));
++            senderLbl.setForeground(UiUtils.avatarColorFor(displayName));
++            metadataWidth = senderLbl.getPreferredSize().width;
+             bubble.add(senderLbl, BorderLayout.NORTH);
+         }
+ 
+         // Nội dung tin nhắn
+-        JTextArea textArea = new JTextArea(msg.text());
+-        textArea.setFont(UiUtils.F_BODY);
+-        textArea.setForeground(isMine ? UiUtils.C_TEXT_LIGHT : UiUtils.C_TEXT_PRIMARY);
+-        textArea.setOpaque(false);
+-        textArea.setEditable(false);
+-        textArea.setFocusable(false);
+-        textArea.setLineWrap(true);
+-        textArea.setWrapStyleWord(true);
+-        textArea.setMaximumSize(new Dimension(380, Integer.MAX_VALUE));
+-        bubble.setMaximumSize(new Dimension(420, Integer.MAX_VALUE));
+-        bubble.add(textArea, BorderLayout.CENTER);
++        body.setFont(UiUtils.F_BODY);
++        body.setText(msg.text());
++        body.setOpaque(false);
++        body.setEditable(false);
++        body.setFocusable(false);
++        body.setBorder(null);
++        body.setMargin(new Insets(0,0,0,0));
++        body.setForeground(isMine ? UiUtils.C_TEXT_LIGHT : UiUtils.C_TEXT_PRIMARY);
++        // Measure with the actual Swing text UI before enabling wrapping.
++        naturalWidth = body.getPreferredSize().width + 6;
++        body.setLineWrap(true);
++        body.setWrapStyleWord(true);
++        bubble.add(body,BorderLayout.CENTER);
+ 
+         // Footer: Thời gian
+         JPanel footer = new JPanel(new FlowLayout(
+@@ -96,9 +127,10 @@ public final class ChatBubbleRenderer extends JPanel {
+         footer.setOpaque(false);
+ 
+         String timeStr = TIME_FMT.format(msg.sentAt());
+-        JLabel timeLbl = new JLabel(isMine ? timeStr + "  \u2713\u2713" : timeStr);
++        JLabel timeLbl = new JLabel(timeStr);
+         timeLbl.setFont(UiUtils.F_SMALL);
+         timeLbl.setForeground(isMine ? new Color(255, 255, 255, 190) : UiUtils.C_TEXT_MUTED);
++        metadataWidth = Math.max(metadataWidth,timeLbl.getPreferredSize().width);
+         footer.add(timeLbl);
+ 
+         bubble.add(footer, BorderLayout.SOUTH);
+diff --git a/desktop-app/src/main/java/com/voicechat/ui/ChatFrame.java b/desktop-app/src/main/java/com/voicechat/ui/ChatFrame.java
+index 0bc796d..598868a 100644
+--- a/desktop-app/src/main/java/com/voicechat/ui/ChatFrame.java
++++ b/desktop-app/src/main/java/com/voicechat/ui/ChatFrame.java
+@@ -4,6 +4,13 @@ import com.voicechat.common.model.ChatMessage;
+ import com.voicechat.common.model.PeerInfo;
+ import com.voicechat.common.model.RoomInfo;
+ 
++import com.voicechat.group.GroupClient;
++import com.voicechat.database.HistoryRepository.Line;
++import com.voicechat.group.GroupProtocol.View;
++import java.awt.event.WindowAdapter;
++import java.awt.event.WindowEvent;
++import java.util.concurrent.ExecutorService;
++import java.util.concurrent.Executors;
+ import javax.swing.*;
+ import javax.swing.border.EmptyBorder;
+ import javax.swing.border.MatteBorder;
+@@ -36,16 +43,36 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
+     private final Map<String, DirectChatPanel> directChats = new LinkedHashMap<>();
+     private final Map<String, GroupChatPanel> groupChats = new LinkedHashMap<>();
+ 
+-    private final String localUsername;
++    private String localUsername;
++    private final GroupClient client;
++    private final ExecutorService requests = Executors.newSingleThreadExecutor(r -> Thread.ofVirtual().unstarted(r));
++    private final JLabel sessionStatus = new JLabel();
++    private JLabel welcomeLabel;
++    private List<RoomInfo> knownRooms = List.of();
++    private List<Line> shownLines;
++    private List<PeerInfo> shownMembers;
++    private RoomInfo activeRoom;
++    private boolean viewingHistory;
++    private int generation, pending, page;
++    private final JButton older = smallButton("Cũ hơn");
++    private final JButton newer = smallButton("Mới hơn");
++    private static JButton smallButton(String text) {
++        return new UiUtils.RoundedButton(text,UiUtils.C_PRIMARY_LIGHT,UiUtils.C_PRIMARY,UiUtils.ARC_SM);
++    }
+     private final String localUserId;
+     private final List<ChatMessage> chatHistory = new ArrayList<>();
+     private final List<RoomInfo> demoRooms = new ArrayList<>();
+     private PeerInfo currentCallPeer = null;
+ 
+     public ChatFrame(String localUsername) {
++        this(localUsername,null,null);
++    }
++
++    public ChatFrame(String localUsername, GroupClient client, View initial) {
+         super("VoiceLink P2P — " + localUsername);
++        this.client = client;
+         this.localUsername = localUsername;
+-        this.localUserId = localUsername;
++        this.localUserId = client==null ? localUsername : client.localId();
+ 
+         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+         setSize(1020, 700);
+@@ -62,12 +89,36 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
+         root.add(buildStatusBar(), BorderLayout.SOUTH);
+         setContentPane(root);
+ 
+-        loadDemoData();
++        if (client == null) {
++            loadDemoData();
++        } else {
++            applyView(initial);
++            var refresh = new javax.swing.Timer(1800,e -> {
++                if (pending==0 && page==0) fetch(viewingHistory ? "history" : "view","",0);
++            });
++            refresh.start();
++            addWindowListener(new WindowAdapter() {
++                @Override public void windowClosed(WindowEvent e) {
++                    refresh.stop();
++                    requests.shutdownNow();
++                    client.close();
++                }
++            });
++        }
+     }
+ 
+     private JPanel buildContentArea() {
+         contentPanel.setBackground(UiUtils.C_APP_BG);
+         contentPanel.add(buildWelcomePanel(), CARD_WELCOME);
++        if (client != null) {
++            var nav = new JPanel(new FlowLayout(FlowLayout.RIGHT));
++            nav.setBackground(UiUtils.C_CARD_BG);
++            nav.add(older);
++            nav.add(newer);
++            older.addActionListener(e -> navigateHistory(page+1));
++            newer.addActionListener(e -> navigateHistory(Math.max(0,page-1)));
++            historyPanel.add(nav,BorderLayout.SOUTH);
++        }
+         contentPanel.add(historyPanel, CARD_HISTORY);
+         contentPanel.add(callPanel, CARD_CALL);
+         cardLayout.show(contentPanel, CARD_WELCOME);
+@@ -101,18 +152,18 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
+         iconPanel.setPreferredSize(new Dimension(460, 66));
+         iconPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
+ 
+-        JLabel iconLbl = new JLabel("\uD83D\uDCAC"); // 💬
++        JLabel iconLbl = new JLabel(UiIcon.CHAT); // 💬
+         iconLbl.setFont(new Font("Segoe UI", Font.PLAIN, 32));
+         iconLbl.setForeground(UiUtils.C_PRIMARY);
+         iconPanel.add(iconLbl);
+         card.add(iconPanel);
+         card.add(Box.createVerticalStrut(16));
+ 
+-        JLabel welcomeLbl = new JLabel("Chào mừng, " + localUsername + "!", SwingConstants.CENTER);
+-        welcomeLbl.setFont(UiUtils.F_TITLE_LG);
+-        welcomeLbl.setForeground(UiUtils.C_TEXT_PRIMARY);
+-        welcomeLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
+-        card.add(welcomeLbl);
++        welcomeLabel = new JLabel("Chào mừng, " + localUsername + "!", SwingConstants.CENTER);
++        welcomeLabel.setFont(UiUtils.F_TITLE_LG);
++        welcomeLabel.setForeground(UiUtils.C_TEXT_PRIMARY);
++        welcomeLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
++        card.add(welcomeLabel);
+         card.add(Box.createVerticalStrut(8));
+ 
+         JLabel hintLbl = new JLabel(
+@@ -141,7 +192,8 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
+         dot.setFont(new Font("Segoe UI", Font.BOLD, 12));
+         dot.setForeground(UiUtils.C_ONLINE);
+ 
+-        JLabel statusText = new JLabel(localUsername + "  •  Sẵn sàng kết nối P2P");
++        JLabel statusText = sessionStatus;
++        statusText.setText(localUsername + "  •  Sẵn sàng kết nối P2P");
+         statusText.setFont(UiUtils.F_SMALL);
+         statusText.setForeground(UiUtils.C_TEXT_MUTED);
+ 
+@@ -157,6 +209,14 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
+         callViewBtn.addActionListener(e -> cardLayout.show(contentPanel, CARD_CALL));
+ 
+         left.add(callViewBtn);
++        if (client != null) {
++            JButton rename = smallButton("Đổi tên");
++            rename.addActionListener(e -> {
++                String name = JOptionPane.showInputDialog(this,"Tên hiển thị mới",localUsername);
++                if (name != null) fetch("rename",name,page);
++            });
++            left.add(rename);
++        }
+         bar.add(left, BorderLayout.WEST);
+ 
+         JLabel ver = new JLabel("VoiceLink P2P v1.0");
+@@ -170,6 +230,7 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
+     // ── SidebarPanel.SelectionListener ───────────────────────────
+     @Override
+     public void onPeerSelected(PeerInfo peer) {
++        resetSelection(null,false);
+         String cardKey = "dm_" + peer.id();
+         if (!directChats.containsKey(peer.id())) {
+             DirectChatPanel panel = new DirectChatPanel(peer, localUserId, buildDmCallback());
+@@ -184,21 +245,29 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
+ 
+     @Override
+     public void onRoomSelected(RoomInfo room) {
++        resetSelection(room,false);
++        sidebarPanel.selectRoom(room);
+         String cardKey = "room_" + room.id();
+         if (!groupChats.containsKey(room.id())) {
+             GroupChatPanel panel = new GroupChatPanel(room, localUserId, buildGroupCallback());
+             panel.loadHistory(chatHistory.stream()
+                     .filter(msg -> room.id().equals(msg.roomId()))
+                     .toList());
++            if (client != null) panel.bindMembership(join -> fetch(join ? "join" : "leave","",0));
+             groupChats.put(room.id(), panel);
+             contentPanel.add(panel, cardKey);
+         }
+         cardLayout.show(contentPanel, cardKey);
++        if (client != null) fetch("view","",0);
+     }
+ 
+     @Override
+     public void onHistoryRequested() {
+-        historyPanel.loadHistory(chatHistory);
++        resetSelection(null,true);
++        if (client != null) {
++            historyPanel.clearHistory();
++            fetch("history","",0);
++        } else historyPanel.loadHistory(chatHistory);
+         cardLayout.show(contentPanel, CARD_HISTORY);
+     }
+ 
+@@ -242,6 +311,11 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
+         okBtn.addActionListener(e -> {
+             String roomName = nameField.getText().trim();
+             if (!roomName.isEmpty()) {
++                if (client != null) {
++                    dialog.dispose();
++                    fetch("create",roomName,0);
++                    return;
++                }
+                 RoomInfo newRoom = new RoomInfo(
+                         "room_" + System.currentTimeMillis(),
+                         roomName,
+@@ -292,6 +366,10 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
+ 
+     private GroupChatPanel.ActionCallback buildGroupCallback() {
+         return (room, text) -> {
++            if (client != null) {
++                fetch("send",text,0);
++                return;
++            }
+             ChatMessage msg = new ChatMessage(
+                     UUID.randomUUID().toString(),
+                     room.id(),
+@@ -306,6 +384,90 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
+         };
+     }
+ 
++    private void resetSelection(RoomInfo room,boolean history) {
++        generation++;
++        activeRoom = room;
++        viewingHistory = history;
++        page = 0;
++        shownLines = null;
++        shownMembers = null;
++    }
++
++    private void navigateHistory(int next) {
++        if (pending==0) fetch("history","",next);
++    }
++
++    /** Serialize user actions on the wire. Late responses cannot switch the active card. */
++    private void fetch(String action,String value,int requestedPage) {
++        int current = generation;
++        String roomId = activeRoom == null ? null : activeRoom.id();
++        pending++;
++        requests.execute(() -> {
++            try {
++                View result = client.request(action,roomId,value,requestedPage);
++                SwingUtilities.invokeLater(() -> {
++                    pending--;
++                    if (!isDisplayable() || current != generation) return;
++                    if (action.equals("create")) {
++                        result.rooms().stream().filter(r -> r.id().equals(result.room())).findFirst()
++                                .ifPresent(this::onRoomSelected);
++                    }
++                    if (viewingHistory && action.equals("rename")) {
++                        fetch("history","",page);
++                    } else {
++                        page = requestedPage;
++                        applyView(result);
++                    }
++                });
++            } catch (Exception ex) {
++                SwingUtilities.invokeLater(() -> {
++                    pending--;
++                    if (!isDisplayable()) return;
++                    if (action.equals("send") && groupChats.containsKey(roomId))
++                        groupChats.get(roomId).restoreDraft(value);
++                    sessionStatus.setText("Lỗi: " + ex.getMessage());
++                    if (!action.equals("view") && !action.equals("history"))
++                        JOptionPane.showMessageDialog(this,ex.getMessage(),"VoiceLink",JOptionPane.WARNING_MESSAGE);
++                });
++            }
++        });
++    }
++
++    private void applyView(View view) {
++        localUsername = view.username();
++        setTitle("VoiceLink P2P — " + localUsername);
++        welcomeLabel.setText("Chào mừng, " + localUsername + "!");
++        sessionStatus.setText(localUsername + "  •  Đã kết nối");
++        if (!knownRooms.equals(view.rooms())) {
++            knownRooms = view.rooms();
++            sidebarPanel.setRooms(knownRooms);
++        }
++        if (viewingHistory) {
++            if (!view.history().equals(shownLines)) {
++                historyPanel.loadHistory(view.history().stream().map(line ->
++                        new ChatMessage(line.id(),line.roomName(),line.sender(),line.text(),Instant.parse(line.at()))).toList());
++                shownLines = view.history();
++            }
++            newer.setEnabled(page>0);
++            older.setEnabled(view.hasOlder());
++        } else if (activeRoom != null && activeRoom.id().equals(view.room())) {
++            GroupChatPanel panel = groupChats.get(view.room());
++            panel.showMembership(view.joined());
++            if (!view.members().equals(shownMembers)) {
++                panel.setMembers(view.members());
++                shownMembers = view.members();
++            }
++            if (!view.history().equals(shownLines)) {
++                Map<String,String> names = new HashMap<>();
++                for (Line line : view.history()) names.put(line.senderId(),line.sender());
++                panel.setDisplayNames(names);
++                panel.loadHistory(view.history().stream().map(line ->
++                        new ChatMessage(line.id(),view.room(),line.senderId(),line.text(),Instant.parse(line.at()))).toList());
++                shownLines = view.history();
++            }
++        }
++    }
++
+     private CallPanel.CallListener buildCallListener() {
+         return new CallPanel.CallListener() {
+             @Override
+diff --git a/desktop-app/src/main/java/com/voicechat/ui/DirectChatPanel.java b/desktop-app/src/main/java/com/voicechat/ui/DirectChatPanel.java
+index 5c1fefd..f1d20b7 100644
+--- a/desktop-app/src/main/java/com/voicechat/ui/DirectChatPanel.java
++++ b/desktop-app/src/main/java/com/voicechat/ui/DirectChatPanel.java
+@@ -22,7 +22,7 @@ public final class DirectChatPanel extends JPanel {
+     }
+ 
+     private final String        localUserId;
+-    private final JPanel        messageContainer = new JPanel();
++    private final JPanel        messageContainer = new MessageList();
+     private JScrollPane         scrollPane;
+     private final InputComposer composer;
+ 
+@@ -75,7 +75,9 @@ public final class DirectChatPanel extends JPanel {
+ 
+         // Bên phải: Nút gọi thoại bo tròn
+         UiUtils.RoundedButton callBtn = new UiUtils.RoundedButton(
+-                "\uD83D\uDCDE  Gọi thoại", UiUtils.C_ONLINE, Color.WHITE, UiUtils.ARC_MD);
++                "Gọi thoại", UiUtils.C_ONLINE, Color.WHITE, UiUtils.ARC_MD);
++        callBtn.setIcon(UiIcon.PHONE);
++        callBtn.setBorder(BorderFactory.createEmptyBorder(6,8,6,8));
+         callBtn.setPreferredSize(new Dimension(116, 36));
+         callBtn.addActionListener(e -> {
+             if (callback != null) callback.onCallRequested(peer);
+@@ -87,7 +89,6 @@ public final class DirectChatPanel extends JPanel {
+ 
+     // ── Message area ──────────────────────────────────────────────
+     private JScrollPane buildMessageArea() {
+-        messageContainer.setLayout(new BoxLayout(messageContainer, BoxLayout.Y_AXIS));
+         messageContainer.setBackground(UiUtils.C_APP_BG);
+         messageContainer.setBorder(new EmptyBorder(12, 0, 12, 0));
+ 
+diff --git a/desktop-app/src/main/java/com/voicechat/ui/GroupChatPanel.java b/desktop-app/src/main/java/com/voicechat/ui/GroupChatPanel.java
+index ec1ad05..bb5935c 100644
+--- a/desktop-app/src/main/java/com/voicechat/ui/GroupChatPanel.java
++++ b/desktop-app/src/main/java/com/voicechat/ui/GroupChatPanel.java
+@@ -22,11 +22,30 @@ public final class GroupChatPanel extends JPanel {
+     }
+ 
+     private final String        localUserId;
+-    private final JPanel        messageContainer = new JPanel();
++    private final JPanel        messageContainer = new MessageList();
+     private final JPanel        memberListPanel  = new JPanel();
+     private JScrollPane         scrollPane;
+     private JLabel              memberCountLbl;
+     private final InputComposer composer;
++    private final UiUtils.RoundedButton membership = new UiUtils.RoundedButton(
++            "Tham gia", UiUtils.C_PRIMARY_LIGHT, UiUtils.C_PRIMARY, UiUtils.ARC_SM);
++    private java.util.Map<String,String> names = java.util.Map.of();
++    private boolean joined;
++    public void bindMembership(java.util.function.Consumer<Boolean> change) {
++        membership.setVisible(true);
++        membership.addActionListener(e -> change.accept(!joined));
++        showMembership(false);
++    }
++    public void showMembership(boolean value) {
++        joined = value;
++        membership.setText(value ? "Rời phòng" : "Tham gia");
++        composer.setVisible(value);
++    }
++    public void setDisplayNames(java.util.Map<String,String> names) { this.names = names; }
++    public void restoreDraft(String text) {
++        if (composer.getText().isEmpty()) composer.setText(text);
++    }
++
+ 
+     public GroupChatPanel(RoomInfo room, String localUserId, ActionCallback callback) {
+         this.localUserId = localUserId;
+@@ -80,11 +99,15 @@ public final class GroupChatPanel extends JPanel {
+         right.setOpaque(false);
+ 
+         UiUtils.RoundedButton callGroupBtn = new UiUtils.RoundedButton(
+-                "\uD83D\uDCDE  Gọi cả nhóm", UiUtils.C_PRIMARY, Color.WHITE, UiUtils.ARC_MD);
++                "Gọi cả nhóm", UiUtils.C_PRIMARY, Color.WHITE, UiUtils.ARC_MD);
++        callGroupBtn.setIcon(UiIcon.PHONE);
++        callGroupBtn.setBorder(BorderFactory.createEmptyBorder(6,8,6,8));
+         callGroupBtn.setPreferredSize(new Dimension(130, 36));
+ 
+         UiUtils.RoundedButton membersBtn = new UiUtils.RoundedButton(
+-                "\uD83D\uDC65  Thành viên", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY, UiUtils.ARC_MD);
++                "Thành viên", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY, UiUtils.ARC_MD);
++        membersBtn.setIcon(UiIcon.GROUP);
++        membersBtn.setBorder(BorderFactory.createEmptyBorder(6,8,6,8));
+         membersBtn.setPreferredSize(new Dimension(116, 36));
+ 
+         membersBtn.addActionListener(e -> {
+@@ -97,6 +120,8 @@ public final class GroupChatPanel extends JPanel {
+ 
+         right.add(callGroupBtn);
+         right.add(membersBtn);
++        membership.setVisible(false);
++        right.add(membership);
+         header.add(right, BorderLayout.EAST);
+ 
+         return header;
+@@ -104,7 +129,6 @@ public final class GroupChatPanel extends JPanel {
+ 
+     // ── Message area ──────────────────────────────────────────────
+     private JScrollPane buildMessageArea() {
+-        messageContainer.setLayout(new BoxLayout(messageContainer, BoxLayout.Y_AXIS));
+         messageContainer.setBackground(UiUtils.C_APP_BG);
+         messageContainer.setBorder(new EmptyBorder(12, 0, 12, 0));
+ 
+@@ -151,12 +175,12 @@ public final class GroupChatPanel extends JPanel {
+     public void setMembers(List<PeerInfo> members) {
+         memberListPanel.removeAll();
+         for (PeerInfo member : members) {
+-            boolean isOnline = (Math.abs(member.username().hashCode()) % 3 != 0);
++
+             JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
+             row.setOpaque(false);
+             row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
+ 
+-            UiUtils.AvatarBadge av = new UiUtils.AvatarBadge(member.username(), 28, false, isOnline, true);
++            UiUtils.AvatarBadge av = new UiUtils.AvatarBadge(member.username(), 28, false, false, false);
+             row.add(av);
+ 
+             JLabel nameLbl = new JLabel(member.username());
+@@ -172,7 +196,7 @@ public final class GroupChatPanel extends JPanel {
+     }
+ 
+     public void appendMessage(ChatMessage msg) {
+-        ChatBubbleRenderer bubble = new ChatBubbleRenderer(msg, localUserId);
++        ChatBubbleRenderer bubble = new ChatBubbleRenderer(msg, localUserId, names.getOrDefault(msg.senderId(),msg.senderId()));
+         bubble.setAlignmentX(Component.LEFT_ALIGNMENT);
+         messageContainer.add(bubble);
+         messageContainer.revalidate();
+@@ -182,7 +206,7 @@ public final class GroupChatPanel extends JPanel {
+     public void loadHistory(List<ChatMessage> history) {
+         messageContainer.removeAll();
+         for (ChatMessage msg : history) {
+-            ChatBubbleRenderer bubble = new ChatBubbleRenderer(msg, localUserId);
++            ChatBubbleRenderer bubble = new ChatBubbleRenderer(msg, localUserId, names.getOrDefault(msg.senderId(),msg.senderId()));
+             bubble.setAlignmentX(Component.LEFT_ALIGNMENT);
+             messageContainer.add(bubble);
+         }
+diff --git a/desktop-app/src/main/java/com/voicechat/ui/HistoryPanel.java b/desktop-app/src/main/java/com/voicechat/ui/HistoryPanel.java
+index a610fa6..e7dedaf 100644
+--- a/desktop-app/src/main/java/com/voicechat/ui/HistoryPanel.java
++++ b/desktop-app/src/main/java/com/voicechat/ui/HistoryPanel.java
+@@ -50,7 +50,7 @@ public final class HistoryPanel extends JPanel {
+         JPanel left = new JPanel(new GridLayout(2, 1, 0, 4));
+         left.setOpaque(false);
+ 
+-        JLabel titleLbl = new JLabel("\uD83D\uDCDC  Lịch sử cuộc trò chuyện");
++        JLabel titleLbl = new JLabel("Lịch sử cuộc trò chuyện",UiIcon.HISTORY,SwingConstants.LEADING);
+         titleLbl.setFont(UiUtils.F_TITLE_LG);
+         titleLbl.setForeground(UiUtils.C_TEXT_PRIMARY);
+ 
+diff --git a/desktop-app/src/main/java/com/voicechat/ui/IncomingCallDialog.java b/desktop-app/src/main/java/com/voicechat/ui/IncomingCallDialog.java
+index 328c216..c2385b8 100644
+--- a/desktop-app/src/main/java/com/voicechat/ui/IncomingCallDialog.java
++++ b/desktop-app/src/main/java/com/voicechat/ui/IncomingCallDialog.java
+@@ -58,14 +58,14 @@ public final class IncomingCallDialog extends JDialog {
+         btnRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
+ 
+         UiUtils.RoundedButton acceptBtn = new UiUtils.RoundedButton(
+-                "✓  Chấp nhận", UiUtils.C_ONLINE, Color.WHITE, UiUtils.ARC_MD);
++                "Chấp nhận", UiUtils.C_ONLINE, Color.WHITE, UiUtils.ARC_MD);
+         acceptBtn.addActionListener(e -> {
+             dispose();
+             if (listener != null) listener.onAccepted();
+         });
+ 
+         UiUtils.RoundedButton rejectBtn = new UiUtils.RoundedButton(
+-                "✕  Từ chối", UiUtils.C_DANGER, Color.WHITE, UiUtils.ARC_MD);
++                "Từ chối", UiUtils.C_DANGER, Color.WHITE, UiUtils.ARC_MD);
+         rejectBtn.addActionListener(e -> {
+             dispose();
+             if (listener != null) listener.onRejected();
+diff --git a/desktop-app/src/main/java/com/voicechat/ui/InputComposer.java b/desktop-app/src/main/java/com/voicechat/ui/InputComposer.java
+index aaaa3aa..d24d2f8 100644
+--- a/desktop-app/src/main/java/com/voicechat/ui/InputComposer.java
++++ b/desktop-app/src/main/java/com/voicechat/ui/InputComposer.java
+@@ -17,7 +17,7 @@ public final class InputComposer extends JPanel {
+     }
+ 
+     private final UiUtils.RoundedTextField inputField = new UiUtils.RoundedTextField("Nhập tin nhắn...", UiUtils.ARC_XL);
+-    private final JButton btnEmoji = new JButton("\uD83D\uDE42"); // 🙂
++    private final JButton btnEmoji = new JButton(UiIcon.SMILE); // 🙂
+     private final SendListener sendListener;
+ 
+     public InputComposer(SendListener listener) {
+@@ -37,6 +37,7 @@ public final class InputComposer extends JPanel {
+ 
+     // ── Emoji button ──────────────────────────────────────────────
+     private JButton buildEmojiButton() {
++        btnEmoji.setMargin(new Insets(0,0,0,0));
+         btnEmoji.setFont(new Font("Segoe UI", Font.PLAIN, 20));
+         btnEmoji.setForeground(UiUtils.C_TEXT_MUTED);
+         btnEmoji.setBorderPainted(false);
+@@ -63,7 +64,9 @@ public final class InputComposer extends JPanel {
+ 
+         for (String em : emojis) {
+             JButton eb = new JButton(em);
+-            eb.setFont(new Font("Segoe UI", Font.PLAIN, 18));
++            eb.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 18));
++            eb.setMargin(new Insets(3,3,3,3));
++            if (eb.getFont().canDisplayUpTo(em.replace("\uFE0F","")) >= 0) continue;
+             eb.setBorderPainted(false);
+             eb.setFocusPainted(false);
+             eb.setBackground(Color.WHITE);
+@@ -110,13 +113,7 @@ public final class InputComposer extends JPanel {
+ 
+                 // Vẽ mũi tên gửi giấy (Paper plane hoặc mũi tên)
+                 g2.setColor(Color.WHITE);
+-                g2.setFont(new Font("Segoe UI", Font.BOLD, 16));
+-                FontMetrics fm = g2.getFontMetrics();
+-                String arrow = "\u27A4"; // ➤
+-                int tx = (getWidth() - fm.stringWidth(arrow)) / 2;
+-                int ty = (getHeight() - fm.getHeight()) / 2 + fm.getAscent();
+-                g2.drawString(arrow, tx, ty);
+-
++                UiIcon.SEND.draw(g2,(getWidth()-20)/2,(getHeight()-20)/2,20,Color.WHITE);
+                 g2.dispose();
+             }
+         };
+diff --git a/desktop-app/src/main/java/com/voicechat/ui/LoginFrame.java b/desktop-app/src/main/java/com/voicechat/ui/LoginFrame.java
+index 2f304ac..eee7c8b 100644
+--- a/desktop-app/src/main/java/com/voicechat/ui/LoginFrame.java
++++ b/desktop-app/src/main/java/com/voicechat/ui/LoginFrame.java
+@@ -70,7 +70,7 @@ public final class LoginFrame extends JFrame {
+         logoPanel.setMaximumSize(new Dimension(420, 58));
+         logoPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
+ 
+-        JLabel logoIcon = new JLabel("\uD83D\uDCAC"); // 💬
++        JLabel logoIcon = new JLabel(UiIcon.CHAT); // 💬
+         logoIcon.setFont(new Font("Segoe UI", Font.PLAIN, 28));
+         logoIcon.setForeground(Color.WHITE);
+         logoPanel.add(logoIcon);
+@@ -100,7 +100,7 @@ public final class LoginFrame extends JFrame {
+ 
+         card.add(buildFieldGroup("Tên người dùng", tfUsername));
+         card.add(Box.createVerticalStrut(12));
+-        card.add(buildFieldGroup("Địa chỉ IP peer", tfIp));
++        card.add(buildFieldGroup("Địa chỉ IP máy chủ phòng", tfIp));
+         card.add(Box.createVerticalStrut(12));
+         card.add(buildFieldGroup("Cổng TCP", tfPort));
+         card.add(Box.createVerticalStrut(20));
+@@ -164,19 +164,19 @@ public final class LoginFrame extends JFrame {
+ 
+         // Validate username
+         if (username.isEmpty()) {
+-            showError("⚠  Tên người dùng không được để trống.");
++            showError("Tên người dùng không được để trống.");
+             tfUsername.requestFocusInWindow();
+             return;
+         }
+         if (username.length() < 2) {
+-            showError("⚠  Tên người dùng phải có ít nhất 2 ký tự.");
++            showError("Tên người dùng phải có ít nhất 2 ký tự.");
+             tfUsername.requestFocusInWindow();
+             return;
+         }
+ 
+         // Validate IP
+         if (!ip.matches("^[\\w.:\\-]+$")) {
+-            showError("⚠  Địa chỉ IP không hợp lệ.");
++            showError("Địa chỉ IP không hợp lệ.");
+             tfIp.requestFocusInWindow();
+             return;
+         }
+@@ -187,38 +187,32 @@ public final class LoginFrame extends JFrame {
+             port = Integer.parseInt(portStr);
+             if (port < 1 || port > 65535) throw new NumberFormatException();
+         } catch (NumberFormatException ex) {
+-            showError("⚠  Cổng phải là số nguyên từ 1 đến 65535.");
++            showError("Cổng phải là số nguyên từ 1 đến 65535.");
+             tfPort.requestFocusInWindow();
+             return;
+         }
+ 
+-        // Giả lập kết nối bằng SwingWorker
++        // Kết nối TCP ngoài luồng giao diện.
+         setFormEnabled(false);
+         progress.setVisible(true);
+ 
+-        final String finalUsername = username;
+-
+-        new SwingWorker<Void, Void>() {
+-            @Override
+-            protected Void doInBackground() throws Exception {
+-                /*
+-                 * TODO (TV1 integration): thay dòng Thread.sleep bằng:
+-                 *   AppCoordinator.getInstance().connect(finalIp, finalPort);
+-                 */
+-                Thread.sleep(600);
+-                return null;
++        new SwingWorker<com.voicechat.group.GroupProtocol.View, Void>() {
++            private com.voicechat.group.GroupClient client;
++            @Override protected com.voicechat.group.GroupProtocol.View doInBackground() throws Exception {
++                client = com.voicechat.group.GroupClient.connect(username,ip,port);
++                return client.request("login",null,username,0);
+             }
+-
+-            @Override
+-            protected void done() {
++            @Override protected void done() {
+                 progress.setVisible(false);
+                 try {
+-                    get();
+-                    new ChatFrame(finalUsername).setVisible(true);
++                    var view = get();
++                    new ChatFrame(view.username(),client,view).setVisible(true);
+                     dispose();
+                 } catch (Exception ex) {
++                    if (client != null) client.close();
+                     setFormEnabled(true);
+-                    showError("⚠  Không thể kết nối: " + ex.getMessage());
++                    Throwable cause = ex.getCause()==null ? ex : ex.getCause();
++                    showError("Kết nối thất bại: " + cause.getMessage());
+                 }
+             }
+         }.execute();
+diff --git a/desktop-app/src/main/java/com/voicechat/ui/MessageList.java b/desktop-app/src/main/java/com/voicechat/ui/MessageList.java
+new file mode 100644
+index 0000000..244423f
+--- /dev/null
++++ b/desktop-app/src/main/java/com/voicechat/ui/MessageList.java
+@@ -0,0 +1,40 @@
++package com.voicechat.ui;
++
++import javax.swing.*;
++import java.awt.*;
++
++/** A vertical transcript whose rows wrap to the actual viewport, including after resize. */
++final class MessageList extends JPanel implements Scrollable {
++    MessageList() { super(null); }
++
++    private int transcriptWidth() {
++        if (getParent() instanceof JViewport viewport && viewport.getExtentSize().width > 0)
++            return viewport.getExtentSize().width;
++        return getWidth() > 0 ? getWidth() : 480;
++    }
++
++    private int arrange(int width, boolean position) {
++        Insets insets = getInsets();
++        int available = Math.max(1,width-insets.left-insets.right);
++        int y = insets.top;
++        for (Component component : getComponents()) {
++            ChatBubbleRenderer row = (ChatBubbleRenderer) component;
++            row.fitTo(available);
++            int height = row.getPreferredSize().height;
++            if (position) row.setBounds(insets.left,y,available,height);
++            y += height;
++        }
++        return y+insets.bottom;
++    }
++
++    @Override public Dimension getPreferredSize() {
++        int width = transcriptWidth();
++        return new Dimension(width,arrange(width,false));
++    }
++    @Override public void doLayout() { arrange(getWidth(),true); }
++    @Override public boolean getScrollableTracksViewportWidth() { return true; }
++    @Override public boolean getScrollableTracksViewportHeight() { return false; }
++    @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
++    @Override public int getScrollableUnitIncrement(Rectangle r,int orientation,int direction) { return 16; }
++    @Override public int getScrollableBlockIncrement(Rectangle r,int orientation,int direction) { return Math.max(16,r.height-16); }
++}
+diff --git a/desktop-app/src/main/java/com/voicechat/ui/SidebarPanel.java b/desktop-app/src/main/java/com/voicechat/ui/SidebarPanel.java
+index 367f14b..69af942 100644
+--- a/desktop-app/src/main/java/com/voicechat/ui/SidebarPanel.java
++++ b/desktop-app/src/main/java/com/voicechat/ui/SidebarPanel.java
+@@ -64,7 +64,7 @@ public final class SidebarPanel extends JPanel {
+         JPanel brandPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+         brandPanel.setOpaque(false);
+ 
+-        JLabel iconLbl = new JLabel("\uD83D\uDCAC"); // 💬
++        JLabel iconLbl = new JLabel(UiIcon.CHAT); // 💬
+         iconLbl.setFont(new Font("Segoe UI", Font.PLAIN, 18));
+         iconLbl.setForeground(UiUtils.C_PRIMARY);
+ 
+@@ -79,6 +79,7 @@ public final class SidebarPanel extends JPanel {
+         // Nút tròn tạo nhóm (+)
+         UiUtils.RoundedButton addBtn = new UiUtils.RoundedButton(
+                 "+", UiUtils.C_PRIMARY, Color.WHITE, 14);
++        addBtn.setBorder(BorderFactory.createEmptyBorder());
+         addBtn.setPreferredSize(new Dimension(30, 30));
+         addBtn.setFont(new Font("Segoe UI", Font.BOLD, 16));
+         addBtn.setToolTipText("Tạo nhóm trò chuyện mới");
+@@ -291,7 +292,9 @@ public final class SidebarPanel extends JPanel {
+         ));
+ 
+         UiUtils.RoundedButton historyBtn = new UiUtils.RoundedButton(
+-                "\uD83D\uDCDC Lịch sử", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY, UiUtils.ARC_SM);
++                "Lịch sử", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY, UiUtils.ARC_SM);
++        historyBtn.setIcon(UiIcon.HISTORY);
++        historyBtn.setBorder(BorderFactory.createEmptyBorder(6,8,6,8));
+         historyBtn.addActionListener(e -> {
+             selectedItem = null;
+             refreshPeerList(currentFilter());
+@@ -321,6 +324,12 @@ public final class SidebarPanel extends JPanel {
+         refreshRoomList(currentFilter());
+     }
+ 
++    public void selectRoom(RoomInfo room) {
++        selectedItem = room;
++        refreshPeerList(currentFilter());
++        refreshRoomList(currentFilter());
++    }
++
+     public void selectPeer(PeerInfo peer) {
+         selectedItem = peer;
+         refreshPeerList(currentFilter());
+diff --git a/desktop-app/src/main/java/com/voicechat/ui/UiIcon.java b/desktop-app/src/main/java/com/voicechat/ui/UiIcon.java
+new file mode 100644
+index 0000000..3ae2cf7
+--- /dev/null
++++ b/desktop-app/src/main/java/com/voicechat/ui/UiIcon.java
+@@ -0,0 +1,41 @@
++package com.voicechat.ui;
++
++import java.awt.*;
++import javax.swing.Icon;
++
++/** VoiceLink controls are drawn in logical pixels, including on high-DPI displays. */
++enum UiIcon implements Icon {
++    CHAT, GROUP, HISTORY, PHONE, SMILE, SEND, MIC, SPEAKER, CLOSE;
++    public int getIconWidth() { return 18; }
++    public int getIconHeight() { return 18; }
++    public void paintIcon(Component c, Graphics g, int x, int y) {
++        draw(g,x,y,18,c.getForeground());
++    }
++    void draw(Graphics g,int x,int y,int size,Color color) {
++        Graphics2D p = (Graphics2D) g.create();
++        try {
++            p.translate(x,y);
++            p.scale(size / 20.0,size / 20.0);
++            p.setColor(color);
++            p.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);
++            p.setStroke(new BasicStroke(1.7f,BasicStroke.CAP_ROUND,BasicStroke.JOIN_ROUND));
++            switch (this) {
++                case CHAT -> {
++                    p.drawRoundRect(2,3,16,11,5,5);
++                    p.drawPolyline(new int[]{5,5,9},new int[]{14,18,14},3);
++                }
++                case GROUP -> {
++                    p.fillOval(4,3,6,6); p.fillOval(12,5,5,5);
++                    p.fillRoundRect(1,10,12,7,6,6); p.fillRoundRect(13,11,6,6,4,4);
++                }
++                case HISTORY -> { p.drawOval(2,2,16,16); p.drawLine(10,5,10,10); p.drawLine(10,10,14,12); }
++                case PHONE -> p.fillPolygon(new int[]{3,6,9,7,12,14,18,17,14,9,5,2},new int[]{3,2,6,8,13,11,14,17,18,16,12,6},12);
++                case SMILE -> { p.drawOval(2,2,16,16); p.fillOval(6,7,2,2); p.fillOval(12,7,2,2); p.drawArc(5,7,10,8,205,130); }
++                case SEND -> p.fillPolygon(new int[]{2,18,2,5,13,5},new int[]{2,10,18,12,10,8},6);
++                case MIC -> { p.fillRoundRect(7,2,6,10,5,5); p.drawArc(4,5,12,10,180,180); p.drawLine(10,15,10,18); }
++                case SPEAKER -> { p.fillPolygon(new int[]{2,6,11,11,6,2},new int[]{8,8,4,16,12,12},6); p.drawArc(9,5,8,10,-60,120); }
++                case CLOSE -> { p.drawLine(5,5,15,15); p.drawLine(15,5,5,15); }
++            }
++        } finally { p.dispose(); }
++    }
++}
+diff --git a/desktop-app/src/main/java/com/voicechat/ui/UiUtils.java b/desktop-app/src/main/java/com/voicechat/ui/UiUtils.java
+index c97a64a..f9fcafa 100644
+--- a/desktop-app/src/main/java/com/voicechat/ui/UiUtils.java
++++ b/desktop-app/src/main/java/com/voicechat/ui/UiUtils.java
+@@ -679,14 +679,8 @@ public final class UiUtils {
+             // 3. Vẽ chữ viết tắt (Initials) hoặc Icon
+             g2.setColor(Color.WHITE);
+             if (isGroup) {
+-                // Nhóm: icon 👥 hoặc chữ GR
+-                int fontSize = Math.max((int) (size * 0.44), 11);
+-                g2.setFont(new Font("Segoe UI", Font.BOLD, fontSize));
+-                FontMetrics fm = g2.getFontMetrics();
+-                String icon = "\uD83D\uDC65"; // 👥
+-                int tx = circleX + (size - fm.stringWidth(icon)) / 2;
+-                int ty = circleY + (size - fm.getHeight()) / 2 + fm.getAscent();
+-                g2.drawString(icon, tx, ty);
++                int iconSize = Math.max(12, size / 2);
++                UiIcon.GROUP.draw(g2,circleX+(size-iconSize)/2,circleY+(size-iconSize)/2,iconSize,Color.WHITE);
+             } else {
+                 String initials = getInitials(name);
+                 int fontSize = initials.length() > 1
+diff --git a/desktop-app/src/test/java/com/voicechat/group/GroupSmoke.java b/desktop-app/src/test/java/com/voicechat/group/GroupSmoke.java
+new file mode 100644
+index 0000000..5b66f1e
+--- /dev/null
++++ b/desktop-app/src/test/java/com/voicechat/group/GroupSmoke.java
+@@ -0,0 +1,77 @@
++package com.voicechat.group;
++
++import com.voicechat.network.PeerManager;
++import com.voicechat.database.DatabaseManager;
++import java.nio.file.*;
++import static com.voicechat.group.GroupProtocol.*;
++
++/** Executable integration test. Uses real TCP and a private temporary SQLite file. */
++public final class GroupSmoke {
++    private static void check(boolean ok,String label) {
++        if (!ok) throw new AssertionError(label);
++    }
++    private static GroupClient connect(String id,int port) throws Exception {
++        var wire = new PeerManager(id);
++        var client = new GroupClient(id,wire);
++        wire.connect("127.0.0.1",port);
++        return client;
++    }
++    private static void rejected(GroupClient client,String action,String room,String value) throws Exception {
++        try { client.request(action,room,value,0); }
++        catch (java.io.IOException expected) { return; }
++        throw new AssertionError(action + " should fail");
++    }
++    private static PeerManager start(Path path) {
++        var wire = new PeerManager(HOST);
++        wire.onControlMessage(new GroupHost(wire,new DatabaseManager(path.toString()))::receive);
++        return wire;
++    }
++    public static void main(String[] args) throws Exception {
++        Path db = Files.createTempFile("ltm-group-test-", ".db");
++        String room;
++        var server = start(db);
++        try {
++            int port = server.startListening(0,0);
++            try (var a=connect("a",port); var b=connect("b",port); var c=connect("c",port)) {
++                a.request("login",null,"Tùng",0);
++                rejected(b,"login",null,"TÙNG");
++                b.request("login",null,"Nga",0);
++                c.request("login",null,"Sơn",0);
++                room = a.request("create",null,"Nhóm LTM",0).room();
++                rejected(c,"send",room,"ngoài phòng");
++                rejected(b,"join","missing","");
++                b.request("join",room,"",0);
++                b.request("join",room,"",0);
++                c.request("join",room,"",0);
++                rejected(a,"send",room,"   ");
++                a.request("send",room,"Chào nhóm 'LTM' 👋",0);
++                b.request("send",room,"Đã nhận!",0);
++                c.request("rename",room,"Minh Sơn",0);
++                var view = c.request("view",room,"",0);
++                check(view.members().size()==3 && view.members().stream().anyMatch(peer -> peer.username().equals("Minh Sơn")),"membership");
++                check(view.history().size()==2 && view.history().get(0).text().contains("👋"),"group history");
++                c.request("leave",room,"",0);
++                rejected(c,"send",room,"đã rời");
++                check(c.request("view",room,"",0).history().isEmpty(),"outsider history");
++                check(c.request("history",null,"",0).history().isEmpty(),"global history membership");
++                String other = b.request("create",null,"Khác",0).room();
++                check(b.request("view",other,"",0).history().isEmpty(),"room isolation");
++                b.request("send",other,"Riêng phòng khác",0);
++                check(a.request("history",null,"",0).history().size()==2,"history isolates rooms");
++                for (int i=0;i<30;i++) a.request("send",room,"Tin "+i,0);
++                check(a.request("view",room,"",1).history().size()==2,"older page");
++            }
++        } finally { server.disconnect(); }
++        server = start(db);
++        try {
++            int port=server.startListening(0,0);
++            try (var c=connect("c",port); var a=connect("a",port)) {
++                check(c.request("login",null,"Sơn",0).username().equals("Minh Sơn"),"persistent name");
++                a.request("login",null,"Tùng",0);
++                var v=a.request("view",room,"",0);
++                check(v.members().size()==2 && v.history().size()==30,"persistent room and history");
++            }
++        } finally { server.disconnect(); Files.deleteIfExists(db); }
++        System.out.println("PASS: 3 TCP clients, SQLite, usernames, membership, delivery, paging, restart.");
++    }
++}
