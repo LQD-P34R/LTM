@@ -8,6 +8,9 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.border.MatteBorder;
 import java.awt.*;
 import java.util.List;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 
 /**
  * VoiceLink DirectChatPanel: Khung chat 1-1 với một peer.
@@ -23,16 +26,19 @@ public final class DirectChatPanel extends JPanel {
 
     private final String        localUserId;
     private final JPanel        messageContainer = new JPanel();
+    private final JPanel        messageStack = new MessageViewportPanel();
     private JScrollPane         scrollPane;
     private final InputComposer composer;
+    private LocalDate lastRenderedDate;
 
     public DirectChatPanel(PeerInfo peer, String localUserId, ActionCallback callback) {
         this.localUserId = localUserId;
         setLayout(new BorderLayout());
-        setBackground(UiUtils.C_APP_BG);
+        setBackground(UiUtils.C_CARD_BG);
+        setOpaque(true);
 
         add(buildHeader(peer, callback), BorderLayout.NORTH);
-        add(buildMessageArea(),          BorderLayout.CENTER);
+        add(buildMessageArea(), BorderLayout.CENTER);
 
         composer = new InputComposer(text -> {
             if (callback != null) callback.onSendMessage(peer, text);
@@ -46,14 +52,14 @@ public final class DirectChatPanel extends JPanel {
         header.setBackground(UiUtils.C_CARD_BG);
         header.setBorder(BorderFactory.createCompoundBorder(
                 new MatteBorder(0, 0, 1, 0, UiUtils.C_BORDER),
-                new EmptyBorder(12, 20, 12, 20)
+                new EmptyBorder(11, 20, 11, 20)
         ));
 
         // Bên trái: AvatarBadge + Tên + Trạng thái
         JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
         left.setOpaque(false);
 
-        boolean isOnline = (Math.abs(peer.username().hashCode()) % 3 != 0);
+        boolean isOnline = false;
         UiUtils.AvatarBadge avatar = new UiUtils.AvatarBadge(peer.username(), 42, false, isOnline, true);
         left.add(avatar);
 
@@ -64,23 +70,29 @@ public final class DirectChatPanel extends JPanel {
         nameLbl.setFont(UiUtils.F_HEADING);
         nameLbl.setForeground(UiUtils.C_TEXT_PRIMARY);
 
-        JLabel statusLbl = new JLabel(isOnline ? "● Đang hoạt động" : "○ Ngoại tuyến");
+        JLabel statusLbl = new JLabel("Trạng thái chưa rõ  •  @" + peer.username());
         statusLbl.setFont(UiUtils.F_SMALL);
-        statusLbl.setForeground(isOnline ? UiUtils.C_ONLINE : UiUtils.C_TEXT_MUTED);
+        statusLbl.setForeground(UiUtils.C_TEXT_MUTED);
 
         info.add(nameLbl);
         info.add(statusLbl);
         left.add(info);
         header.add(left, BorderLayout.WEST);
 
-        // Bên phải: Nút gọi thoại bo tròn
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0)); actions.setOpaque(false);
+        JButton search = new JButton(new AppIcons(AppIcons.Kind.SEARCH,18,UiUtils.C_TEXT_MUTED));
+        search.setPreferredSize(new Dimension(36,36)); search.setToolTipText("Tìm trong cuộc trò chuyện");
+        search.setBorderPainted(false); search.setContentAreaFilled(false); search.setFocusPainted(false);
         UiUtils.RoundedButton callBtn = new UiUtils.RoundedButton(
-                "\uD83D\uDCDE  Gọi thoại", UiUtils.C_ONLINE, Color.WHITE, UiUtils.ARC_MD);
-        callBtn.setPreferredSize(new Dimension(116, 36));
+                "Gọi thoại", UiUtils.C_PRIMARY, UiUtils.C_TEXT_PRIMARY, 12);
+        callBtn.setIcon(new AppIcons(AppIcons.Kind.HEADSET, 16, UiUtils.C_TEXT_PRIMARY));
+        callBtn.setPreferredSize(new Dimension(136, 36));
+        callBtn.setMinimumSize(new Dimension(136, 36));
+        callBtn.setMaximumSize(new Dimension(136, 36));
         callBtn.addActionListener(e -> {
             if (callback != null) callback.onCallRequested(peer);
         });
-        header.add(callBtn, BorderLayout.EAST);
+        actions.add(search); actions.add(callBtn); header.add(actions, BorderLayout.EAST);
 
         return header;
     }
@@ -88,32 +100,56 @@ public final class DirectChatPanel extends JPanel {
     // ── Message area ──────────────────────────────────────────────
     private JScrollPane buildMessageArea() {
         messageContainer.setLayout(new BoxLayout(messageContainer, BoxLayout.Y_AXIS));
-        messageContainer.setBackground(UiUtils.C_APP_BG);
-        messageContainer.setBorder(new EmptyBorder(12, 0, 12, 0));
+        messageContainer.setBackground(UiUtils.C_CARD_BG);
+        messageContainer.setOpaque(true);
+        messageContainer.setBorder(new EmptyBorder(12, 16, 12, 4));
 
-        scrollPane = new JScrollPane(messageContainer);
-        scrollPane.setBorder(null);
-        scrollPane.setBackground(UiUtils.C_APP_BG);
-        scrollPane.getViewport().setBackground(UiUtils.C_APP_BG);
+        messageStack.setBackground(UiUtils.C_CARD_BG);
+        messageStack.setOpaque(true);
+        messageStack.add(messageContainer, BorderLayout.CENTER);
+        scrollPane = new JScrollPane(messageStack);
+        scrollPane.setBorder(BorderFactory.createEmptyBorder());
+        scrollPane.setBackground(UiUtils.C_CARD_BG);
+        scrollPane.setOpaque(true);
+        scrollPane.getViewport().setBackground(UiUtils.C_CARD_BG);
+        scrollPane.getViewport().setOpaque(true);
         scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollPane.setViewportBorder(BorderFactory.createEmptyBorder());
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
         return scrollPane;
     }
 
-    public void appendMessage(ChatMessage msg) {
+    private void appendRow(ChatMessage msg) {
+        LocalDate date=msg.sentAt().atZone(ZoneId.systemDefault()).toLocalDate();
+        if (!date.equals(lastRenderedDate)) { messageContainer.add(dateBadge(date)); lastRenderedDate=date; }
         ChatBubbleRenderer bubble = new ChatBubbleRenderer(msg, localUserId);
-        bubble.setAlignmentX(Component.LEFT_ALIGNMENT);
-        messageContainer.add(bubble);
+        boolean sentByMe=msg.senderId().equals(localUserId);
+        JPanel row = new JPanel(new FlowLayout(sentByMe?FlowLayout.RIGHT:FlowLayout.LEFT,20,4)); row.setOpaque(false);
+        row.add(bubble);
+        messageContainer.add(row);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE,row.getPreferredSize().height));
+        messageContainer.add(Box.createVerticalStrut(8));
+    }
+    private JComponent dateBadge(LocalDate date) {
+        String[] days={"CN","T2","T3","T4","T5","T6","T7"};
+        String label=days[date.getDayOfWeek().getValue()%7]+" "+date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+        JPanel outer=new JPanel(new FlowLayout(FlowLayout.CENTER,0,10)); outer.setOpaque(false);
+        UiUtils.RoundedButton pill=new UiUtils.RoundedButton(label,UiUtils.C_PRIMARY_LIGHT,UiUtils.C_TEXT_PRIMARY,12);
+        pill.setFont(UiTheme.SEMIBOLD_FONT.deriveFont(11.5f)); pill.setBorder(new EmptyBorder(4,12,4,12)); pill.setFocusable(false);
+        outer.add(pill); outer.setMaximumSize(new Dimension(Integer.MAX_VALUE, pill.getPreferredSize().height+20)); return outer;
+    }
+
+    public void appendMessage(ChatMessage msg) {
+        appendRow(msg);
         messageContainer.revalidate();
         scrollToBottom();
     }
 
     public void loadHistory(List<ChatMessage> history) {
         messageContainer.removeAll();
+        lastRenderedDate=null;
         for (ChatMessage msg : history) {
-            ChatBubbleRenderer bubble = new ChatBubbleRenderer(msg, localUserId);
-            bubble.setAlignmentX(Component.LEFT_ALIGNMENT);
-            messageContainer.add(bubble);
+            appendRow(msg);
         }
         messageContainer.revalidate();
         messageContainer.repaint();
@@ -131,5 +167,14 @@ public final class DirectChatPanel extends JPanel {
             JScrollBar v = scrollPane.getVerticalScrollBar();
             v.setValue(v.getMaximum());
         });
+    }
+
+    private static final class MessageViewportPanel extends JPanel implements Scrollable {
+        MessageViewportPanel() { super(new BorderLayout()); }
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+        @Override public boolean getScrollableTracksViewportHeight() { return false; }
+        @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        @Override public int getScrollableUnitIncrement(Rectangle visibleRect,int orientation,int direction) { return 16; }
+        @Override public int getScrollableBlockIncrement(Rectangle visibleRect,int orientation,int direction) { return Math.max(16,visibleRect.height-16); }
     }
 }

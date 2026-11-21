@@ -1,107 +1,162 @@
 package com.voicechat.ui;
 
 import com.voicechat.common.model.ChatMessage;
-
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
-/**
- * VoiceLink ChatBubbleRenderer: Render bong bóng tin nhắn bo tròn 2 chiều mượt mà.
- * <p>Tin nhắn của mình: căn phải, màu chủ đạo C_PRIMARY, chữ trắng, dấu kiểm nhận ✓✓.<br>
- * Tin nhắn người khác: căn trái, thẻ trắng tinh C_CARD_BG có viền mảnh 1px C_BORDER, kèm avatar nhỏ.</p>
- */
+/** Responsive message row pinned directly to EAST/WEST so it stays close to the right edge. */
 public final class ChatBubbleRenderer extends JPanel {
-
-    private static final DateTimeFormatter TIME_FMT =
-            DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault());
-
-    private static final int BUBBLE_ARC = 16;
+    private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault());
+    private static final int ARC = 20;
+    private final boolean mine;
+    private final JPanel bubble;
+    private final JTextArea content;
+    private final JLabel sender;
+    private final JLabel timestamp;
+    private final int padWidth = 32;
 
     public ChatBubbleRenderer(ChatMessage msg, String localUserId) {
-        boolean isMine = msg.senderId().equals(localUserId);
-
+        this.mine = msg.senderId() != null && msg.senderId().equalsIgnoreCase(localUserId);
         setLayout(new BorderLayout());
         setOpaque(false);
-        setBorder(new EmptyBorder(4, 16, 4, 16));
+        // Cách lề phải đúng 12px (rất gần đường kẻ cột phải), cách lề trái 16px
+        setBorder(new EmptyBorder(4, 12, 4, 2));
 
-        JPanel row = new JPanel(new FlowLayout(
-                isMine ? FlowLayout.RIGHT : FlowLayout.LEFT, 8, 0));
-        row.setOpaque(false);
-
-        // Nếu là tin nhắn của người khác, hiển thị thêm avatar nhỏ bên trái
-        if (!isMine) {
-            UiUtils.AvatarBadge avatar = new UiUtils.AvatarBadge(msg.senderId(), 28, false, false, false);
-            row.add(avatar);
-        }
-
-        row.add(buildBubble(msg, isMine));
-        add(row, BorderLayout.CENTER);
-    }
-
-    private JPanel buildBubble(ChatMessage msg, boolean isMine) {
-        JPanel bubble = new JPanel(new BorderLayout(0, 3)) {
+        bubble = new JPanel(new BorderLayout()) {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 UiUtils.enableAntiAliasing(g2);
-
-                int w = getWidth();
-                int h = getHeight();
-
-                if (isMine) {
-                    // Nền màu chủ đạo xanh
-                    g2.setColor(UiUtils.C_PRIMARY);
-                    g2.fillRoundRect(0, 0, w, h, BUBBLE_ARC, BUBBLE_ARC);
-                } else {
-                    // Nền trắng tinh + viền mảnh tinh tế 1px
-                    g2.setColor(UiUtils.C_CARD_BG);
-                    g2.fillRoundRect(0, 0, w, h, BUBBLE_ARC, BUBBLE_ARC);
-                    g2.setColor(UiUtils.C_BORDER);
-                    g2.setStroke(new BasicStroke(1f));
-                    g2.drawRoundRect(0, 0, w - 1, h - 1, BUBBLE_ARC, BUBBLE_ARC);
-                }
+                g2.setColor(mine ? UiUtils.C_BUBBLE_OUTGOING : UiUtils.C_BUBBLE_INCOMING);
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), ARC, ARC);
                 g2.dispose();
             }
         };
         bubble.setOpaque(false);
-        bubble.setBorder(new EmptyBorder(8, 14, 8, 14));
+        bubble.setBorder(new EmptyBorder(10, 16, 10, 16));
 
-        // Tên người gửi (cho tin nhắn của người khác)
-        if (!isMine) {
-            JLabel senderLbl = new JLabel(msg.senderId());
-            senderLbl.setFont(UiUtils.F_SMALL_BOLD);
-            senderLbl.setForeground(UiUtils.avatarColorFor(msg.senderId()));
-            bubble.add(senderLbl, BorderLayout.NORTH);
+        sender = new JLabel(msg.senderId());
+        sender.setFont(UiUtils.F_SMALL_BOLD);
+        sender.setForeground(UiUtils.C_TEXT_PRIMARY);
+        if (!mine) {
+            sender.setBorder(new EmptyBorder(0, 0, 4, 0));
+            bubble.add(sender, BorderLayout.NORTH);
         }
 
-        // Nội dung tin nhắn
-        JTextArea textArea = new JTextArea(msg.text());
-        textArea.setFont(UiUtils.F_BODY);
-        textArea.setForeground(isMine ? UiUtils.C_TEXT_LIGHT : UiUtils.C_TEXT_PRIMARY);
-        textArea.setOpaque(false);
-        textArea.setEditable(false);
-        textArea.setFocusable(false);
-        textArea.setLineWrap(true);
-        textArea.setWrapStyleWord(true);
-        textArea.setMaximumSize(new Dimension(380, Integer.MAX_VALUE));
-        bubble.setMaximumSize(new Dimension(420, Integer.MAX_VALUE));
-        bubble.add(textArea, BorderLayout.CENTER);
+        content = new JTextArea(msg.text() == null ? "" : msg.text().trim());
+        content.setFont(UiUtils.F_BODY);
+        content.setForeground(mine ? Color.WHITE : UiUtils.C_TEXT_PRIMARY);
+        content.setOpaque(false);
+        content.setEditable(false);
+        content.setFocusable(false);
+        content.setMargin(new Insets(0, 0, 0, 0));
+        content.setBorder(new EmptyBorder(0, 0, 4, 0));
+        content.setLineWrap(true);
+        content.setWrapStyleWord(true);
 
-        // Footer: Thời gian
-        JPanel footer = new JPanel(new FlowLayout(
-                isMine ? FlowLayout.RIGHT : FlowLayout.LEFT, 0, 0));
-        footer.setOpaque(false);
+        timestamp = new JLabel(TIME_FMT.format(msg.sentAt()), SwingConstants.LEFT);
+        timestamp.setFont(UiTheme.REGULAR_FONT.deriveFont(11f));
+        timestamp.setForeground(mine ? new Color(255,251,242,220) : UiUtils.C_TEXT_MUTED);
 
-        String timeStr = TIME_FMT.format(msg.sentAt());
-        JLabel timeLbl = new JLabel(isMine ? timeStr + "  \u2713\u2713" : timeStr);
-        timeLbl.setFont(UiUtils.F_SMALL);
-        timeLbl.setForeground(isMine ? new Color(255, 255, 255, 190) : UiUtils.C_TEXT_MUTED);
-        footer.add(timeLbl);
+        JPanel body = new JPanel(new BorderLayout());
+        body.setOpaque(false);
+        body.add(content, BorderLayout.CENTER);
+        body.add(timestamp, BorderLayout.SOUTH);
+        bubble.add(body, BorderLayout.CENTER);
 
-        bubble.add(footer, BorderLayout.SOUTH);
-        return bubble;
+        if (mine) {
+            // Đẩy trực tiếp sát sang mép phải
+            add(bubble, BorderLayout.EAST);
+        } else {
+            JPanel leftGroup = new JPanel(new BorderLayout(8, 0));
+            leftGroup.setOpaque(false);
+            JPanel avatarWrap = new JPanel(new BorderLayout());
+            avatarWrap.setOpaque(false);
+            avatarWrap.add(new UiUtils.AvatarBadge(msg.senderId(), 28, false, false, false), BorderLayout.NORTH);
+            leftGroup.add(avatarWrap, BorderLayout.WEST);
+            leftGroup.add(bubble, BorderLayout.CENTER);
+            add(leftGroup, BorderLayout.WEST);
+        }
+
+        updateForAvailableWidth(650);
+    }
+
+    private int availableWidth() {
+        Container parent = getParent();
+        while (parent != null) {
+            if (parent instanceof JViewport viewport && viewport.getWidth() > 0) {
+                return viewport.getWidth();
+            }
+            parent = parent.getParent();
+        }
+        return 650;
+    }
+
+    private void updateForAvailableWidth(int viewportWidth) {
+        int maxBubbleWidth = Math.max(140, (int) (viewportWidth * 0.72));
+        FontMetrics metrics = content.getFontMetrics(content.getFont());
+        FontMetrics timeMetrics = timestamp.getFontMetrics(timestamp.getFont());
+
+        int maxTextWidth = Math.max(60, maxBubbleWidth - padWidth - (!mine ? 36 : 0));
+        String[] lines = content.getText().split("\\R", -1);
+        int widestLine = timeMetrics.stringWidth(timestamp.getText()) + 8;
+        for (String line : lines) {
+            widestLine = Math.max(widestLine, metrics.stringWidth(line) + 8);
+        }
+
+        int textWidth = Math.min(maxTextWidth, widestLine);
+        content.setPreferredSize(null);
+        content.setSize(new Dimension(textWidth, Short.MAX_VALUE));
+        Dimension pref = content.getPreferredSize();
+        int textHeight = Math.max(metrics.getHeight(), pref.height) + 4;
+        content.setPreferredSize(new Dimension(textWidth, textHeight));
+
+        int bubbleWidth = textWidth + padWidth;
+        int senderHeight = mine ? 0 : sender.getPreferredSize().height + 4;
+        int timeHeight = timeMetrics.getHeight() + 2;
+        int bubbleHeight = textHeight + senderHeight + timeHeight + 20;
+
+        Dimension bubbleDim = new Dimension(bubbleWidth, bubbleHeight);
+        bubble.setPreferredSize(bubbleDim);
+        bubble.setMinimumSize(bubbleDim);
+        bubble.setMaximumSize(bubbleDim);
+        revalidate();
+    }
+
+    @Override
+    public Dimension getPreferredSize() {
+        updateForAvailableWidth(availableWidth());
+        return super.getPreferredSize();
+    }
+
+    private void refreshHeightConstraint(int width) {
+        updateForAvailableWidth(width);
+        Dimension preferred = super.getPreferredSize();
+        setMaximumSize(new Dimension(Integer.MAX_VALUE, preferred.height));
+    }
+
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        SwingUtilities.invokeLater(() -> {
+            Container p = getParent();
+            while (p != null && !(p instanceof JViewport)) {
+                p = p.getParent();
+            }
+            if (p instanceof JViewport viewport) {
+                viewport.addComponentListener(new ComponentAdapter() {
+                    @Override
+                    public void componentResized(ComponentEvent e) {
+                        refreshHeightConstraint(viewport.getWidth());
+                    }
+                });
+                refreshHeightConstraint(viewport.getWidth());
+            }
+        });
     }
 }

@@ -14,52 +14,50 @@ import java.util.List;
 
 /**
  * VoiceLink ChatFrame: Cửa sổ làm việc chính của ứng dụng.
- * <p>
- * Bố cục 2 cột hiện đại: Sidebar bên trái rộng 260px nền trắng,
+ * <p>Bố cục 2 cột hiện đại: Sidebar bên trái rộng 260px nền trắng,
  * vùng nội dung bên phải (CardLayout) trên nền Slate dịu mắt,
- * kèm thanh trạng thái thanh lịch ở đáy.
- * </p>
+ * kèm thanh trạng thái thanh lịch ở đáy.</p>
  */
 public final class ChatFrame extends JFrame implements SidebarPanel.SelectionListener {
 
     private static final String CARD_WELCOME = "WELCOME";
     private static final String CARD_HISTORY = "HISTORY";
-    private static final String CARD_CALL = "CALL";
+    private static final String CARD_CALL    = "CALL";
 
-    private final CardLayout cardLayout = new CardLayout();
-    private final JPanel contentPanel = new JPanel(cardLayout);
+    private final CardLayout cardLayout   = new CardLayout();
+    private final JPanel     contentPanel = new JPanel(cardLayout);
 
     private final SidebarPanel sidebarPanel;
     private final HistoryPanel historyPanel = new HistoryPanel();
-    private final CallPanel callPanel;
+    private final CallPanel    callPanel;
 
     private final Map<String, DirectChatPanel> directChats = new LinkedHashMap<>();
-    private final Map<String, GroupChatPanel> groupChats = new LinkedHashMap<>();
+    private final Map<String, GroupChatPanel>  groupChats  = new LinkedHashMap<>();
 
-    private final String localUsername;
-    private final String localUserId;
+    private final String            localUsername;
+    private final String            localUserId;
     private final List<ChatMessage> chatHistory = new ArrayList<>();
-    private final List<RoomInfo> demoRooms = new ArrayList<>();
-    private PeerInfo currentCallPeer = null;
+    private final List<RoomInfo>    demoRooms   = new ArrayList<>();
+    private PeerInfo                currentCallPeer = null;
 
     public ChatFrame(String localUsername) {
         super("VoiceLink P2P — " + localUsername);
         this.localUsername = localUsername;
-        this.localUserId = localUsername;
+        this.localUserId   = localUsername;
 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1020, 700);
         setMinimumSize(new Dimension(800, 520));
         setLocationRelativeTo(null);
 
-        callPanel = new CallPanel(buildCallListener());
+        callPanel    = new CallPanel(buildCallListener());
         sidebarPanel = new SidebarPanel(this);
 
         JPanel root = new JPanel(new BorderLayout());
         root.setBackground(UiUtils.C_APP_BG);
-        root.add(sidebarPanel, BorderLayout.WEST);
+        root.add(sidebarPanel,       BorderLayout.WEST);
         root.add(buildContentArea(), BorderLayout.CENTER);
-        root.add(buildStatusBar(), BorderLayout.SOUTH);
+        root.add(buildStatusBar(),   BorderLayout.SOUTH);
         setContentPane(root);
 
         loadDemoData();
@@ -68,8 +66,8 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
     private JPanel buildContentArea() {
         contentPanel.setBackground(UiUtils.C_APP_BG);
         contentPanel.add(buildWelcomePanel(), CARD_WELCOME);
-        contentPanel.add(historyPanel, CARD_HISTORY);
-        contentPanel.add(callPanel, CARD_CALL);
+        contentPanel.add(historyPanel,        CARD_HISTORY);
+        contentPanel.add(callPanel,           CARD_CALL);
         cardLayout.show(contentPanel, CARD_WELCOME);
         return contentPanel;
     }
@@ -132,7 +130,8 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
         bar.setBackground(UiUtils.C_CARD_BG);
         bar.setBorder(BorderFactory.createCompoundBorder(
                 new MatteBorder(1, 0, 0, 0, UiUtils.C_BORDER),
-                new EmptyBorder(6, 16, 6, 16)));
+                new EmptyBorder(6, 16, 6, 16)
+        ));
 
         JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         left.setOpaque(false);
@@ -147,16 +146,6 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
 
         left.add(dot);
         left.add(statusText);
-
-        UiUtils.RoundedButton callViewBtn = new UiUtils.RoundedButton(
-                "Cuộc gọi",
-                UiUtils.C_PRIMARY_LIGHT,
-                UiUtils.C_PRIMARY,
-                UiUtils.ARC_SM);
-
-        callViewBtn.addActionListener(e -> cardLayout.show(contentPanel, CARD_CALL));
-
-        left.add(callViewBtn);
         bar.add(left, BorderLayout.WEST);
 
         JLabel ver = new JLabel("VoiceLink P2P v1.0");
@@ -173,9 +162,6 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
         String cardKey = "dm_" + peer.id();
         if (!directChats.containsKey(peer.id())) {
             DirectChatPanel panel = new DirectChatPanel(peer, localUserId, buildDmCallback());
-            panel.loadHistory(chatHistory.stream()
-                    .filter(msg -> cardKey.equals(msg.roomId()))
-                    .toList());
             directChats.put(peer.id(), panel);
             contentPanel.add(panel, cardKey);
         }
@@ -187,9 +173,6 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
         String cardKey = "room_" + room.id();
         if (!groupChats.containsKey(room.id())) {
             GroupChatPanel panel = new GroupChatPanel(room, localUserId, buildGroupCallback());
-            panel.loadHistory(chatHistory.stream()
-                    .filter(msg -> room.id().equals(msg.roomId()))
-                    .toList());
             groupChats.put(room.id(), panel);
             contentPanel.add(panel, cardKey);
         }
@@ -245,7 +228,8 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
                 RoomInfo newRoom = new RoomInfo(
                         "room_" + System.currentTimeMillis(),
                         roomName,
-                        localUserId);
+                        localUserId
+                );
                 demoRooms.add(newRoom);
                 sidebarPanel.setRooms(new ArrayList<>(demoRooms));
                 dialog.dispose();
@@ -273,7 +257,8 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
                         "dm_" + peer.id(),
                         localUserId,
                         text,
-                        Instant.now());
+                        Instant.now()
+                );
                 chatHistory.add(msg);
                 DirectChatPanel panel = directChats.get(peer.id());
                 if (panel != null) {
@@ -297,7 +282,8 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
                     room.id(),
                     localUserId,
                     text,
-                    Instant.now());
+                    Instant.now()
+            );
             chatHistory.add(msg);
             GroupChatPanel panel = groupChats.get(room.id());
             if (panel != null) {
@@ -334,12 +320,10 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
         if (roomId.startsWith("dm_")) {
             String peerId = roomId.substring(3);
             DirectChatPanel panel = directChats.get(peerId);
-            if (panel != null)
-                panel.appendMessage(msg);
+            if (panel != null) panel.appendMessage(msg);
         } else {
             GroupChatPanel panel = groupChats.get(roomId);
-            if (panel != null)
-                panel.appendMessage(msg);
+            if (panel != null) panel.appendMessage(msg);
         }
     }
 
@@ -352,19 +336,19 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
     }
 
     public void showIncomingCall(String callerName) {
-        SwingUtilities
-                .invokeLater(() -> new IncomingCallDialog(this, callerName, new IncomingCallDialog.ResponseListener() {
-                    @Override
-                    public void onAccepted() {
-                        callPanel.setState(CallPanel.CallState.IN_CALL, callerName);
-                        cardLayout.show(contentPanel, CARD_CALL);
-                    }
-
-                    @Override
-                    public void onRejected() {
-                        // Từ chối cuộc gọi
-                    }
-                }).setVisible(true));
+        SwingUtilities.invokeLater(() ->
+            new IncomingCallDialog(this, callerName, new IncomingCallDialog.ResponseListener() {
+                @Override
+                public void onAccepted() {
+                    callPanel.setState(CallPanel.CallState.IN_CALL, callerName);
+                    cardLayout.show(contentPanel, CARD_CALL);
+                }
+                @Override
+                public void onRejected() {
+                    // Từ chối cuộc gọi
+                }
+            }).setVisible(true)
+        );
     }
 
     public void onCallEnded() {
@@ -384,12 +368,14 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
 
     private void loadDemoData() {
         List<PeerInfo> peers = List.of(
-                new PeerInfo("peer_B", "User_B", "192.168.1.2", 5000, 5001),
-                new PeerInfo("peer_C", "User_C", "192.168.1.3", 5000, 5001),
-                new PeerInfo("peer_D", "User_D", "192.168.1.4", 5000, 5001));
+            new PeerInfo("peer_B", "User_B", "192.168.1.2", 5000, 5001),
+            new PeerInfo("peer_C", "User_C", "192.168.1.3", 5000, 5001),
+            new PeerInfo("peer_D", "User_D", "192.168.1.4", 5000, 5001)
+        );
         demoRooms.addAll(List.of(
-                new RoomInfo("room_1", "Nhóm học nhóm", localUserId),
-                new RoomInfo("room_2", "Project Alpha", localUserId)));
+            new RoomInfo("room_1", "Nhóm học nhóm", localUserId),
+            new RoomInfo("room_2", "Project Alpha", localUserId)
+        ));
         sidebarPanel.setPeers(peers);
         sidebarPanel.setRooms(new ArrayList<>(demoRooms));
     }

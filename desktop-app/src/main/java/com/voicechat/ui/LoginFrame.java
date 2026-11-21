@@ -1,5 +1,6 @@
 package com.voicechat.ui;
 
+import com.formdev.flatlaf.FlatLightLaf;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
@@ -12,20 +13,28 @@ import java.awt.event.*;
  */
 public final class LoginFrame extends JFrame {
 
+    static {
+        FlatLightLaf.setup();
+        UIManager.put("Button.arc", 999);
+        UiUtils.installGlobalTypography();
+    }
+
     // ── Widgets ───────────────────────────────────────────────────
     private final UiUtils.RoundedTextField tfUsername = new UiUtils.RoundedTextField("Nhập tên người dùng...");
     private final UiUtils.RoundedTextField tfIp       = new UiUtils.RoundedTextField("Ví dụ: 127.0.0.1");
     private final UiUtils.RoundedTextField tfPort     = new UiUtils.RoundedTextField("Mặc định: 5000");
     private final UiUtils.RoundedButton    btnConnect = new UiUtils.RoundedButton(
-            "Kết nối / Đăng nhập", UiUtils.C_PRIMARY, Color.WHITE, UiUtils.ARC_MD);
+            "Kết nối / Đăng nhập", UiUtils.C_PRIMARY, UiUtils.C_TEXT_PRIMARY, UiUtils.ARC_MD);
+    private final UiUtils.RoundedButton btnDemo = new UiUtils.RoundedButton(
+            "Xem trước giao diện (Demo UI)", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY, UiUtils.ARC_SM);
     private final JProgressBar             progress   = new JProgressBar();
     private final JLabel                   lblError   = new JLabel(" ");
 
     public LoginFrame() {
         super("VoiceLink P2P — Đăng nhập");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(500, 580);
-        setMinimumSize(new Dimension(460, 540));
+        setSize(500, 600);
+        setMinimumSize(new Dimension(460, 560));
         setLocationRelativeTo(null);
 
         // Nền tổng thể sáng dịu mắt (Slate-50)
@@ -41,6 +50,7 @@ public final class LoginFrame extends JFrame {
         tfIp.addActionListener(connectAction);
         tfPort.addActionListener(connectAction);
         btnConnect.addActionListener(connectAction);
+        btnDemo.addActionListener(e -> new ChatFrame("Demo User").setVisible(true));
     }
 
     // ── Thẻ Card đăng nhập trung tâm ──────────────────────────────
@@ -49,8 +59,8 @@ public final class LoginFrame extends JFrame {
                 UiUtils.ARC_LG, UiUtils.C_CARD_BG, UiUtils.C_BORDER, true);
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setBorder(new EmptyBorder(32, 40, 32, 40));
-        card.setPreferredSize(new Dimension(420, 500));
-        card.setMaximumSize(new Dimension(420, 500));
+        card.setPreferredSize(new Dimension(420, 530));
+        card.setMaximumSize(new Dimension(420, 530));
 
         // 1. Logo Badge hình tròn
         JPanel logoPanel = new JPanel() {
@@ -59,7 +69,7 @@ public final class LoginFrame extends JFrame {
                 super.paintComponent(g);
                 Graphics2D g2 = (Graphics2D) g.create();
                 UiUtils.enableAntiAliasing(g2);
-                g2.setColor(UiUtils.C_PRIMARY);
+                g2.setColor(UiUtils.C_DANGER);
                 g2.fillOval((getWidth() - 56) / 2, 0, 56, 56);
                 g2.dispose();
             }
@@ -70,9 +80,7 @@ public final class LoginFrame extends JFrame {
         logoPanel.setMaximumSize(new Dimension(420, 58));
         logoPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        JLabel logoIcon = new JLabel("\uD83D\uDCAC"); // 💬
-        logoIcon.setFont(new Font("Segoe UI", Font.PLAIN, 28));
-        logoIcon.setForeground(Color.WHITE);
+        JLabel logoIcon = new JLabel(new AppIcons(AppIcons.Kind.LOGO, 30, Color.WHITE));
         logoPanel.add(logoIcon);
 
         card.add(logoPanel);
@@ -110,7 +118,12 @@ public final class LoginFrame extends JFrame {
         btnConnect.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
         btnConnect.setPreferredSize(new Dimension(340, 44));
         card.add(btnConnect);
-        card.add(Box.createVerticalStrut(12));
+        card.add(Box.createVerticalStrut(8));
+        btnDemo.setAlignmentX(Component.CENTER_ALIGNMENT);
+        btnDemo.setPreferredSize(new Dimension(340, 34));
+        btnDemo.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+        card.add(btnDemo);
+        card.add(Box.createVerticalStrut(6));
 
         // 5. Thanh tiến trình và thông báo lỗi
         progress.setIndeterminate(true);
@@ -119,7 +132,7 @@ public final class LoginFrame extends JFrame {
         progress.setAlignmentX(Component.CENTER_ALIGNMENT);
         progress.setVisible(false);
         progress.setBorderPainted(false);
-        progress.setForeground(UiUtils.C_PRIMARY);
+        progress.setForeground(UiUtils.C_PRIMARY_TEXT);
         card.add(progress);
         card.add(Box.createVerticalStrut(6));
 
@@ -139,7 +152,9 @@ public final class LoginFrame extends JFrame {
         group.setAlignmentX(Component.CENTER_ALIGNMENT);
         group.setMaximumSize(new Dimension(Integer.MAX_VALUE, 64));
 
-        JLabel lbl = new JLabel(labelText);
+        AppIcons.Kind fieldIcon = labelText.contains("Tên") ? AppIcons.Kind.USER
+                : labelText.contains("IP") ? AppIcons.Kind.HOST : AppIcons.Kind.PORT;
+        JLabel lbl = new JLabel(labelText, new AppIcons(fieldIcon, 14, UiUtils.C_TEXT_MUTED), SwingConstants.LEFT);
         lbl.setFont(UiUtils.F_SMALL_BOLD);
         lbl.setForeground(UiUtils.C_TEXT_PRIMARY);
         lbl.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -164,19 +179,19 @@ public final class LoginFrame extends JFrame {
 
         // Validate username
         if (username.isEmpty()) {
-            showError("⚠  Tên người dùng không được để trống.");
+            showError("Tên người dùng không được để trống.");
             tfUsername.requestFocusInWindow();
             return;
         }
         if (username.length() < 2) {
-            showError("⚠  Tên người dùng phải có ít nhất 2 ký tự.");
+            showError("Tên người dùng phải có ít nhất 2 ký tự.");
             tfUsername.requestFocusInWindow();
             return;
         }
 
         // Validate IP
         if (!ip.matches("^[\\w.:\\-]+$")) {
-            showError("⚠  Địa chỉ IP không hợp lệ.");
+            showError("Địa chỉ IP không hợp lệ.");
             tfIp.requestFocusInWindow();
             return;
         }
@@ -187,41 +202,14 @@ public final class LoginFrame extends JFrame {
             port = Integer.parseInt(portStr);
             if (port < 1 || port > 65535) throw new NumberFormatException();
         } catch (NumberFormatException ex) {
-            showError("⚠  Cổng phải là số nguyên từ 1 đến 65535.");
+            showError("Cổng phải là số nguyên từ 1 đến 65535.");
             tfPort.requestFocusInWindow();
             return;
         }
 
-        // Giả lập kết nối bằng SwingWorker
-        setFormEnabled(false);
-        progress.setVisible(true);
-
-        final String finalUsername = username;
-
-        new SwingWorker<Void, Void>() {
-            @Override
-            protected Void doInBackground() throws Exception {
-                /*
-                 * TODO (TV1 integration): thay dòng Thread.sleep bằng:
-                 *   AppCoordinator.getInstance().connect(finalIp, finalPort);
-                 */
-                Thread.sleep(600);
-                return null;
-            }
-
-            @Override
-            protected void done() {
-                progress.setVisible(false);
-                try {
-                    get();
-                    new ChatFrame(finalUsername).setVisible(true);
-                    dispose();
-                } catch (Exception ex) {
-                    setFormEnabled(true);
-                    showError("⚠  Không thể kết nối: " + ex.getMessage());
-                }
-            }
-        }.execute();
+        // LoginFrame currently has no backend callback contract; do not report a
+        // connection or open the chat until AppCoordinator supplies its result.
+        showError("Chưa có callback kết nối từ backend. Dữ liệu đã được kiểm tra.");
     }
 
     private void setFormEnabled(boolean enabled) {

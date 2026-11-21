@@ -4,6 +4,7 @@ import java.awt.*;
 import java.awt.event.*;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.plaf.FontUIResource;
 
 /**
  * VoiceLink Design System & Custom UI Components.
@@ -19,74 +20,74 @@ public final class UiUtils {
     // =========================================================================
 
     // --- Bảng màu nền (Background Colors) ---
-    /** Nền ứng dụng dịu mắt, phong cách hiện đại (Slate-50) */
-    public static final Color C_APP_BG          = new Color(0xF8, 0xFA, 0xFC);
+    /** Nền kem ấm của vùng làm việc. */
+    public static final Color C_APP_BG          = new Color(0xFB, 0xF4, 0xE3);
     /** Nền thứ cấp cho Dock / Tabs rail / Sidebar */
-    public static final Color C_SIDEBAR_LIGHT   = new Color(0xF1, 0xF5, 0xF9);
-    /** Nền thẻ card trắng tinh khiết */
-    public static final Color C_CARD_BG         = Color.WHITE;
+    public static final Color C_SIDEBAR_LIGHT   = new Color(0xFF, 0xFB, 0xF2);
+    /** Nền kem sáng cho thẻ và bề mặt. */
+    public static final Color C_CARD_BG         = new Color(0xFF, 0xFB, 0xF2);
+    /** Nền be đậm hơn dành riêng cho ô nhập và hành động gọi nhóm. */
+    public static final Color C_BEIGE_FIELD     = new Color(0xF1, 0xE4, 0xC4);
     /** Nền khi di chuột (Hover nhẹ) */
-    public static final Color C_HOVER_BG        = new Color(0xF1, 0xF5, 0xF9);
+    public static final Color C_HOVER_BG        = new Color(0xF3, 0xE8, 0xD2);
     /** Nền mục đang được chọn (Selected pastel blue) */
-    public static final Color C_SELECTED_BG     = new Color(0xEB, 0xF3, 0xFF);
+    public static final Color C_SELECTED_BG     = new Color(0xDC, 0xE8, 0xF1);
 
     // --- Bảng màu viền (Borders) ---
-    /** Viền mảnh tinh tế 1px (Slate-200) */
-    public static final Color C_BORDER          = new Color(0xE2, 0xE8, 0xF0);
+    /** Viền mảnh tinh tế 1px */
+    public static final Color C_BORDER          = new Color(0xC8, 0xBE, 0xAA);
     /** Viền khi ô nhập liệu được Active/Focus */
-    public static final Color C_BORDER_FOCUS    = new Color(0x0B, 0x63, 0xE5);
+    public static final Color C_BORDER_FOCUS    = new Color(0x70, 0x9B, 0xBA);
 
     // --- Bảng màu nhấn chủ đạo (Primary Accent) ---
     /** Màu xanh chủ đạo VoiceLink (Primary Blue) */
-    public static final Color C_PRIMARY         = new Color(0x0B, 0x63, 0xE5);
+    public static final Color C_PRIMARY         = new Color(0x8D, 0xB4, 0xD2);
     /** Màu xanh khi Hover */
-    public static final Color C_PRIMARY_HOVER   = new Color(0x09, 0x52, 0xC4);
+    public static final Color C_PRIMARY_HOVER   = new Color(0x70, 0x9B, 0xBA);
+    /** Sắc xanh đậm dành cho chữ/icon trên nền xanh nhạt và trạng thái đang chọn. */
+    public static final Color C_PRIMARY_TEXT    = new Color(0x49, 0x6D, 0x86);
     /** Màu xanh pastel cho badge/pill phụ */
-    public static final Color C_PRIMARY_LIGHT   = new Color(0xEB, 0xF3, 0xFF);
-    /** Màu xanh đậm cho banner chào mừng / Login Hero */
-    public static final Color C_PRIMARY_HERO    = new Color(0x13, 0x51, 0xB4);
+    public static final Color C_PRIMARY_LIGHT   = new Color(0xDC, 0xE8, 0xF1);
+    /** Màu nâu rượu đậm cho điểm nhấn thương hiệu. */
+    public static final Color C_PRIMARY_HERO    = new Color(0x4A, 0x1D, 0x22);
 
     // --- Bảng màu trạng thái (Status Colors) ---
-    /** Xanh lá: Online / Đang nói / Gọi thoại */
-    public static final Color C_ONLINE          = new Color(0x22, 0xC5, 0x5E);
+    /** Xanh bột cho chấm trạng thái và điểm nhấn nhẹ. */
+    public static final Color C_ONLINE          = new Color(0x8D, 0xB4, 0xD2);
     /** Xanh lá đậm khi Hover nút gọi */
-    public static final Color C_ONLINE_HOVER    = new Color(0x16, 0xA3, 0x4A);
+    public static final Color C_ONLINE_HOVER    = new Color(0x75, 0x9F, 0xBF);
     /** Đỏ: Kết thúc cuộc gọi / Hủy / Nguy hiểm */
-    public static final Color C_DANGER          = new Color(0xEF, 0x44, 0x44);
+    public static final Color C_DANGER          = new Color(0xA8, 0x2A, 0x35);
     /** Đỏ khi Hover */
-    public static final Color C_DANGER_HOVER    = new Color(0xDC, 0x26, 0x26);
+    public static final Color C_DANGER_HOVER    = new Color(0x8F, 0x20, 0x2B);
     /** Vàng cam: Cảnh báo / Tắt mic (Mute) */
-    public static final Color C_WARNING         = new Color(0xF5, 0x9E, 0x0B);
+    public static final Color C_WARNING         = new Color(0xE4, 0xC8, 0x8B);
 
     // --- Bảng màu chữ (Typography Colors) ---
-    /** Chữ chính: Đậm, rõ ràng, tương phản cao (Slate-900) */
-    public static final Color C_TEXT_PRIMARY    = new Color(0x0F, 0x17, 0x2A);
-    /** Chữ phụ: Mô tả, tin nhắn phụ, thời gian (Slate-500) */
-    public static final Color C_TEXT_MUTED      = new Color(0x64, 0x74, 0x8B);
+    /** Chữ chính màu nâu rượu đậm, tương phản cao. */
+    public static final Color C_TEXT_PRIMARY    = new Color(0x3B, 0x16, 0x1B);
+    /** Chữ phụ màu nâu xám đậm cho mô tả và thời gian. */
+    public static final Color C_TEXT_MUTED      = new Color(0x65, 0x50, 0x55);
     /** Chữ gợi ý (Placeholder) / Chấm trạng thái Offline (Slate-400) */
-    public static final Color C_TEXT_HINT       = new Color(0x94, 0xA3, 0xB8);
-    /** Chữ trắng trên nền tối / nút nhấn */
-    public static final Color C_TEXT_LIGHT      = Color.WHITE;
+    public static final Color C_TEXT_HINT       = new Color(0x78, 0x64, 0x68);
+    /** Màu chữ tương phản trên nền xanh bột. */
+    public static final Color C_TEXT_LIGHT      = C_TEXT_PRIMARY;
 
     // --- Bong bóng tin nhắn (Chat Bubbles) ---
-    public static final Color C_BUBBLE_INCOMING = new Color(0xF1, 0xF5, 0xF9);
-    public static final Color C_BUBBLE_OUTGOING = new Color(0x0B, 0x63, 0xE5);
+    public static final Color C_BUBBLE_INCOMING = new Color(0xDC, 0xE8, 0xF1);
+    public static final Color C_BUBBLE_OUTGOING = new Color(0xA8, 0x2A, 0x35);
 
     // --- Màu Call Dark Mode (Cuộc gọi toàn cảnh) ---
-    public static final Color C_CALL_DARK_BG    = new Color(0x0F, 0x17, 0x2A);
-    public static final Color C_CALL_CTRL_BG    = new Color(0x1E, 0x29, 0x3B);
-    public static final Color C_CALL_CTRL_HOV   = new Color(0x33, 0x41, 0x55);
+    public static final Color C_CALL_DARK_BG    = new Color(0xFB, 0xF4, 0xE3);
+    public static final Color C_CALL_CTRL_BG    = new Color(0xFF, 0xFB, 0xF2);
+    public static final Color C_CALL_CTRL_HOV   = new Color(0xDC, 0xE8, 0xF1);
 
     // --- Bảng màu Avatar Pastel rực rỡ ---
     public static final Color[] AVATAR_PALETTE = {
-        new Color(0x63, 0x66, 0xF1), // Tím Indigo (Minh Anh)
-        new Color(0x05, 0x96, 0x69), // Xanh Ngọc Emerald (Đồ án Mạng)
-        new Color(0xDB, 0x27, 0x77), // Hồng Rose (Thu Hà)
-        new Color(0xEA, 0x58, 0x0C), // Cam Amber (Quốc Bảo)
-        new Color(0x25, 0x63, 0xEB), // Xanh Royal (Team Java)
-        new Color(0x65, 0xA3, 0x0D), // Xanh Lá Olive (Hoàng Nam)
-        new Color(0x0D, 0x94, 0x88), // Xanh Teal (Đức Anh)
-        new Color(0x7C, 0x3A, 0xED), // Tím Violet (Lan Phương)
+        new Color(0xE8, 0xD9, 0xB9), new Color(0xD6, 0xE4, 0xED),
+        new Color(0xE8, 0xC9, 0xCE), new Color(0xD7, 0xB9, 0xA2),
+        new Color(0xDC, 0xE8, 0xF1), new Color(0xF0, 0xDE, 0xB8),
+        new Color(0xE7, 0xD2, 0xC8), new Color(0xE6, 0xC9, 0xD0)
     };
 
     // --- Độ bo góc chuẩn (Arc Radii) ---
@@ -95,15 +96,38 @@ public final class UiUtils {
     public static final int ARC_LG = 18; // Khung Card chính, container
     public static final int ARC_XL = 24; // Floating dock, pill search
 
-    // --- Phông chữ chuẩn hiện đại (Segoe UI fallback SansSerif) ---
-    public static final Font F_TITLE_XL  = new Font("Segoe UI", Font.BOLD,  22);
-    public static final Font F_TITLE_LG  = new Font("Segoe UI", Font.BOLD,  18);
-    public static final Font F_HEADING   = new Font("Segoe UI", Font.BOLD,  15);
-    public static final Font F_BODY      = new Font("Segoe UI", Font.PLAIN, 13);
-    public static final Font F_BODY_BOLD = new Font("Segoe UI", Font.BOLD,  13);
-    public static final Font F_SMALL     = new Font("Segoe UI", Font.PLAIN, 11);
-    public static final Font F_SMALL_BOLD= new Font("Segoe UI", Font.BOLD,  11);
-    public static final Font F_BTN       = new Font("Segoe UI", Font.BOLD,  13);
+    static { installGlobalTypography(); }
+
+    /** Apply Segoe UI to Swing delegates before component instances are created. */
+    public static void installGlobalTypography() {
+        UIDefaults defaults = UIManager.getDefaults();
+        java.util.Enumeration<Object> keys = defaults.keys();
+        while (keys.hasMoreElements()) {
+            Object key = keys.nextElement();
+            Object value = defaults.get(key);
+            if (value instanceof Font font) {
+                Font base = font.isBold() ? UiTheme.SEMIBOLD_FONT : UiTheme.REGULAR_FONT;
+                defaults.put(key, new FontUIResource(base.deriveFont(font.getStyle(), (float) font.getSize())));
+            }
+        }
+        FontUIResource base = new FontUIResource(UiTheme.REGULAR_FONT.deriveFont(13f));
+        for (String key : new String[]{"defaultFont", "Label.font", "Button.font", "ToggleButton.font",
+                "TextField.font", "TextArea.font", "TextPane.font", "EditorPane.font", "ComboBox.font",
+                "List.font", "Table.font", "TableHeader.font", "Menu.font", "MenuItem.font",
+                "CheckBox.font", "RadioButton.font", "TabbedPane.font", "ToolTip.font", "OptionPane.font"}) {
+            UIManager.put(key, base);
+        }
+    }
+
+    // --- Phông chữ chuẩn hiện đại ---
+    public static final Font F_TITLE_XL  = UiTheme.SEMIBOLD_FONT.deriveFont(20f);
+    public static final Font F_TITLE_LG  = UiTheme.SEMIBOLD_FONT.deriveFont(18f);
+    public static final Font F_HEADING   = UiTheme.SEMIBOLD_FONT.deriveFont(15f);
+    public static final Font F_BODY      = UiTheme.REGULAR_FONT.deriveFont(13.5f);
+    public static final Font F_BODY_BOLD = UiTheme.SEMIBOLD_FONT.deriveFont(13.5f);
+    public static final Font F_SMALL     = UiTheme.REGULAR_FONT.deriveFont(11.5f);
+    public static final Font F_SMALL_BOLD= UiTheme.SEMIBOLD_FONT.deriveFont(11.5f);
+    public static final Font F_BTN       = UiTheme.SEMIBOLD_FONT.deriveFont(13f);
 
     // =========================================================================
     // 2. HELPER METHODS
@@ -117,12 +141,14 @@ public final class UiUtils {
 
     /**
      * Trích xuất chữ cái viết tắt (Initials) thông minh giống VoiceLink:
-     * "Minh Anh" -> "MA", "Quốc Bảo" -> "QB", "Bạn" -> "B", "User_A" -> "UA".
+     * "Minh Anh" -> "MA", "Quốc Bảo" -> "QB", "Bạn" -> "BN", "User_A" -> "UA".
      */
     public static String getInitials(String name) {
         if (name == null || name.trim().isEmpty()) return "?";
         String clean = name.trim();
-        String[] parts = clean.split("[\\s_]+");
+        if (clean.equalsIgnoreCase("Bạn") || clean.startsWith("Bạn -")) return "BN";
+        String[] parts = clean.split("[^\\p{L}\\p{N}]+");
+        if (parts.length == 0) return "?";
         if (parts.length == 1) {
             String w = parts[0];
             return w.length() >= 2 ? w.substring(0, 2).toUpperCase() : w.toUpperCase();
@@ -140,6 +166,7 @@ public final class UiUtils {
     public static void enableAntiAliasing(Graphics2D g2) {
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g2.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
     }
 
@@ -232,7 +259,7 @@ public final class UiUtils {
                 // Đổ bóng mềm nhiều lớp (subtle soft shadow)
                 int shadowSize = 3;
                 for (int i = shadowSize; i >= 1; i--) {
-                    g2.setColor(new Color(15, 23, 42, 3 * i));
+                    g2.setColor(new Color(74, 29, 34, 3 * i));
                     g2.fillRoundRect(i - 1, i, width - (i - 1) * 2, height - i * 2, arc + i, arc + i);
                 }
             }
@@ -347,10 +374,26 @@ public final class UiUtils {
             repaint();
         }
 
+        @Override
+        public Dimension getPreferredSize() {
+            Dimension preferred = super.getPreferredSize();
+            FontMetrics metrics = getFontMetrics(getFont());
+            int textWidth = getText() == null ? 0 : metrics.stringWidth(getText());
+            int textHeight = getText() == null || getText().isEmpty() ? 0 : metrics.getHeight();
+            Icon icon = getIcon();
+            int iconWidth = icon == null ? 0 : icon.getIconWidth();
+            int iconHeight = icon == null ? 0 : icon.getIconHeight();
+            int gap = iconWidth > 0 && textWidth > 0 ? getIconTextGap() : 0;
+            Insets insets = getInsets();
+            int neededWidth = textWidth + iconWidth + gap + insets.left + insets.right;
+            int neededHeight = Math.max(textHeight, iconHeight) + insets.top + insets.bottom;
+            return new Dimension(Math.max(preferred.width, neededWidth), Math.max(preferred.height, neededHeight));
+        }
+
         private static Color calculateHoverColor(Color base) {
             // Nếu màu trắng hoặc rất sáng thì tối đi một chút
             if (base.getRed() > 230 && base.getGreen() > 230 && base.getBlue() > 230) {
-                return new Color(0xEA, 0xEE, 0xF4);
+            return new Color(0xF3, 0xE8, 0xD2);
             }
             // Màu thông thường: làm sáng nhẹ hoặc tối nhẹ
             return new Color(
@@ -367,7 +410,7 @@ public final class UiUtils {
 
             Color currentBg;
             if (!isEnabled()) {
-                currentBg = new Color(0xE2, 0xE8, 0xF0);
+                currentBg = new Color(0xE3, 0xD9, 0xC8);
             } else if (isPressed && pressedBg != null) {
                 currentBg = pressedBg;
             } else if (isHovered && hoverBg != null) {
@@ -431,7 +474,8 @@ public final class UiUtils {
             setForeground(C_TEXT_PRIMARY);
             setCaretColor(C_PRIMARY);
             setOpaque(false);
-            setBorder(new EmptyBorder(10, 14, 10, 14));
+            setBorder(new EmptyBorder(8, 16, 8, 16));
+            focusBorder = normalBorder;
 
             addFocusListener(new FocusAdapter() {
                 @Override
@@ -476,15 +520,9 @@ public final class UiUtils {
             g2.fillRoundRect(1, 1, w - 2, h - 2, arc, arc);
 
             // Vẽ viền
-            if (isFocused) {
-                g2.setColor(focusBorder);
-                g2.setStroke(new BasicStroke(1.5f));
-                g2.drawRoundRect(1, 1, w - 3, h - 3, arc, arc);
-            } else {
-                g2.setColor(normalBorder != null ? normalBorder : C_BORDER);
-                g2.setStroke(new BasicStroke(1f));
-                g2.drawRoundRect(1, 1, w - 3, h - 3, arc, arc);
-            }
+            g2.setColor(normalBorder != null ? normalBorder : C_BORDER);
+            g2.setStroke(new BasicStroke(1f));
+            g2.drawRoundRect(1, 1, w - 3, h - 3, arc, arc);
 
             g2.dispose();
 
@@ -664,29 +702,24 @@ public final class UiUtils {
 
             // 1. Nếu đang nói (Speaking): vẽ vòng hào quang phát sáng
             if (isSpeaking) {
-                g2.setColor(new Color(34, 197, 94, 60));
+                g2.setColor(new Color(C_PRIMARY.getRed(), C_PRIMARY.getGreen(), C_PRIMARY.getBlue(), 60));
                 g2.fillOval(0, 0, getWidth(), getHeight());
-                g2.setColor(new Color(34, 197, 94, 140));
+                g2.setColor(new Color(C_PRIMARY.getRed(), C_PRIMARY.getGreen(), C_PRIMARY.getBlue(), 140));
                 g2.setStroke(new BasicStroke(2f));
                 g2.drawOval(1, 1, getWidth() - 3, getHeight() - 3);
             }
 
             // 2. Vẽ hình tròn Avatar
-            Color bg = isGroup ? new Color(0x05, 0x96, 0x69) : avatarColorFor(name);
+            Color bg = isGroup ? new Color(0xD6, 0xE4, 0xED) : avatarColorFor(name);
             g2.setColor(bg);
             g2.fillOval(circleX, circleY, size, size);
 
             // 3. Vẽ chữ viết tắt (Initials) hoặc Icon
-            g2.setColor(Color.WHITE);
+            g2.setColor(C_TEXT_PRIMARY);
             if (isGroup) {
-                // Nhóm: icon 👥 hoặc chữ GR
-                int fontSize = Math.max((int) (size * 0.44), 11);
-                g2.setFont(new Font("Segoe UI", Font.BOLD, fontSize));
-                FontMetrics fm = g2.getFontMetrics();
-                String icon = "\uD83D\uDC65"; // 👥
-                int tx = circleX + (size - fm.stringWidth(icon)) / 2;
-                int ty = circleY + (size - fm.getHeight()) / 2 + fm.getAscent();
-                g2.drawString(icon, tx, ty);
+                int iconSize = Math.min(26, size - 12);
+                new AppIcons(AppIcons.Kind.GROUP, iconSize, C_TEXT_PRIMARY).paintIcon(this, g2,
+                        circleX + (size - iconSize) / 2, circleY + (size - iconSize) / 2);
             } else {
                 String initials = getInitials(name);
                 int fontSize = initials.length() > 1
@@ -706,7 +739,7 @@ public final class UiUtils {
                 int by = circleY + size - badgeSize;
 
                 // Vành trắng ngăn cách
-                g2.setColor(Color.WHITE);
+                g2.setColor(C_SIDEBAR_LIGHT);
                 g2.fillOval(bx - 2, by - 2, badgeSize + 4, badgeSize + 4);
 
                 // Chấm màu
