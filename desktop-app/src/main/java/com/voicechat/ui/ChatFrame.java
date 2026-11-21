@@ -147,6 +147,7 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
 
         left.add(dot);
         left.add(statusText);
+
         UiUtils.RoundedButton callViewBtn = new UiUtils.RoundedButton(
                 "Cuộc gọi",
                 UiUtils.C_PRIMARY_LIGHT,
