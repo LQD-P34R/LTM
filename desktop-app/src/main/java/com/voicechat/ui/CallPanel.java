@@ -6,38 +6,50 @@ import java.awt.*;
 import java.awt.event.*;
 
 /**
- * VoiceLink CallPanel: Giao diện cuộc gọi voice chuẩn VoiceLink (Page 3 trong PDF).
- * <p>Hiển thị thẻ thành viên với Avatar lớn ở trung tâm (có hiệu ứng vòng hào quang phát sáng khi đang nói),
- * tên to đậm bên dưới, đồng hồ đếm thời gian và thanh điều khiển nổi (Floating Control Bar) bo tròn ở cạnh dưới.</p>
+ * VoiceLink CallPanel: Giao diện cuộc gọi voice chuẩn VoiceLink (Page 3 trong
+ * PDF).
+ * <p>
+ * Hiển thị thẻ thành viên với Avatar lớn ở trung tâm (có hiệu ứng vòng hào
+ * quang phát sáng khi đang nói),
+ * tên to đậm bên dưới, đồng hồ đếm thời gian và thanh điều khiển nổi (Floating
+ * Control Bar) bo tròn ở cạnh dưới.
+ * </p>
  */
 public final class CallPanel extends JPanel {
 
-    public enum CallState { IDLE, RINGING, IN_CALL }
+    public enum CallState {
+        IDLE, RINGING, IN_CALL
+    }
 
     public interface CallListener {
         void onCallCancelled();
+
         void onCallEnded();
+
         void onMuteToggled(boolean muted);
     }
 
     private final CallListener listener;
-    private CallState  state    = CallState.IDLE;
-    private boolean    isMuted  = false;
-    private int        callSecs = 0;
-    private String     currentPeerName = "";
+    private CallState state = CallState.IDLE;
+    private boolean isMuted = false;
+    private int callSecs = 0;
+    private String currentPeerName = "";
     private javax.swing.Timer callTimer;
 
     // Center elements
     private final UiUtils.AvatarBadge avatarBadge = new UiUtils.AvatarBadge("", 96, false, true, false);
-    private final JLabel titleLbl  = new JLabel("", SwingConstants.CENTER);
-    private final JLabel subLbl    = new JLabel("", SwingConstants.CENTER);
-    private final JLabel timerLbl  = new JLabel("00:00", SwingConstants.CENTER);
+    private final JLabel titleLbl = new JLabel("", SwingConstants.CENTER);
+    private final JLabel subLbl = new JLabel("", SwingConstants.CENTER);
+    private final JLabel timerLbl = new JLabel("00:00", SwingConstants.CENTER);
 
     // Floating Control buttons
-    private final JButton btnMute    = createCircularBtn(UiIcon.MIC, "Tắt/Bật mic", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY); // 🎤
-    private final JButton btnSpeaker = createCircularBtn(UiIcon.SPEAKER, "Loa ngoài", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY); // 🔊
-    private final JButton btnEnd     = createCircularBtn(UiIcon.PHONE, "Kết thúc cuộc gọi", UiUtils.C_DANGER, Color.WHITE);             // 📵
-    private final JButton btnCancel  = createCircularBtn(UiIcon.CLOSE, "Huỷ gọi", UiUtils.C_DANGER, Color.WHITE);                              // ✕
+    private final JButton btnMute = createCircularBtn("\uD83C\uDFA4", "Tắt/Bật mic", UiUtils.C_SIDEBAR_LIGHT,
+            UiUtils.C_TEXT_PRIMARY); // 🎤
+    private final JButton btnSpeaker = createCircularBtn("\uD83D\uDD0A", "Loa ngoài", UiUtils.C_SIDEBAR_LIGHT,
+            UiUtils.C_TEXT_PRIMARY); // 🔊
+    private final JButton btnEnd = createCircularBtn("\uD83D\uDCF5", "Kết thúc cuộc gọi", UiUtils.C_DANGER,
+            Color.WHITE); // 📵
+    private final JButton btnCancel = createCircularBtn("\u2715", "Huỷ gọi", UiUtils.C_DANGER, Color.WHITE); // ✕
 
     private final JPanel floatingBar = new UiUtils.RoundedPanel(
             UiUtils.ARC_XL, UiUtils.C_CARD_BG, UiUtils.C_BORDER, true);
@@ -104,15 +116,17 @@ public final class CallPanel extends JPanel {
         add(bottomWrap, BorderLayout.SOUTH);
     }
 
-    private static JButton createCircularBtn(UiIcon icon, String tooltip, Color bg, Color fg) {
+    private static JButton createCircularBtn(String icon, String tooltip, Color bg, Color fg) {
         JButton btn = new JButton(icon) {
             private boolean isHover = false;
+
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 UiUtils.enableAntiAliasing(g2);
                 Color c = getBackground();
-                if (isHover) c = c.darker();
+                if (isHover)
+                    c = c.darker();
                 g2.setColor(c);
                 g2.fillOval(0, 0, getWidth(), getHeight());
                 g2.dispose();
@@ -120,7 +134,6 @@ public final class CallPanel extends JPanel {
             }
         };
         btn.setFont(new Font("Segoe UI", Font.PLAIN, 18));
-        btn.setMargin(new Insets(0,0,0,0));
         btn.setForeground(fg);
         btn.setBackground(bg);
         btn.setPreferredSize(new Dimension(50, 50));
@@ -132,8 +145,15 @@ public final class CallPanel extends JPanel {
         btn.setToolTipText(tooltip);
 
         btn.addMouseListener(new MouseAdapter() {
-            @Override public void mouseEntered(MouseEvent e) { btn.repaint(); }
-            @Override public void mouseExited(MouseEvent e)  { btn.repaint(); }
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                btn.repaint();
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                btn.repaint();
+            }
         });
         return btn;
     }
@@ -142,21 +162,26 @@ public final class CallPanel extends JPanel {
         btnMute.addActionListener(e -> {
             isMuted = !isMuted;
             setMuteState(isMuted);
-            if (listener != null) listener.onMuteToggled(isMuted);
+            if (listener != null)
+                listener.onMuteToggled(isMuted);
         });
 
         btnEnd.addActionListener(e -> {
             setState(CallState.IDLE, "");
-            if (listener != null) listener.onCallEnded();
+            if (listener != null)
+                listener.onCallEnded();
         });
 
         btnCancel.addActionListener(e -> {
             setState(CallState.IDLE, "");
-            if (listener != null) listener.onCallCancelled();
+            if (listener != null)
+                listener.onCallCancelled();
         });
     }
 
     public void setState(CallState newState, String peerName) {
+        if (newState != this.state)
+            setMuteState(false);
         this.state = newState;
         this.currentPeerName = peerName != null ? peerName : "";
         applyState(newState, currentPeerName);
@@ -176,9 +201,17 @@ public final class CallPanel extends JPanel {
         btnMute.repaint();
     }
 
-    public CallState getState() { return state; }
-    public String getCurrentPeerName() { return currentPeerName; }
-    public int getCallDurationSeconds() { return callSecs; }
+    public CallState getState() {
+        return state;
+    }
+
+    public String getCurrentPeerName() {
+        return currentPeerName;
+    }
+
+    public int getCallDurationSeconds() {
+        return callSecs;
+    }
 
     private void applyState(CallState s, String name) {
         stopTimer();

@@ -20,6 +20,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.concurrent.CompletableFuture;
 
 /** Manages TCP control connections and a shared local UDP endpoint. */
 public final class PeerManager implements NetworkGateway {
@@ -33,8 +34,16 @@ public final class PeerManager implements NetworkGateway {
     private final Set<Socket> connections = new HashSet<>();
     private ServerSocket listener;
     private UdpService udp;
-    private volatile Consumer<ControlMessage> controlCallback = message -> {};
-    private volatile BiConsumer<String, byte[]> voiceCallback = (id, bytes) -> {};
+    private volatile Consumer<ControlMessage> controlCallback = message -> {
+    };
+    private volatile BiConsumer<String, byte[]> voiceCallback = (id, bytes) -> {
+    };
+
+    private volatile Consumer<String> peerConnectedCallback = peerId -> {
+    };
+    private volatile Consumer<String> peerDisconnectedCallback = peerId -> {
+    };
+    private CompletableFuture<Void> peerEvents = CompletableFuture.completedFuture(null);
 
     public PeerManager() {
         this(UUID.randomUUID().toString());
@@ -149,8 +158,11 @@ public final class PeerManager implements NetworkGateway {
                     TcpService.writeHello(output, localId, transport.localPort());
                 }
                 peers.put(peer.id, peer);
+
                 if (existing != null) {
                     TcpService.close(existing.socket);
+                } else {
+                    enqueuePeerEvent(peerConnectedCallback, peer.id);
                 }
             }
             established = true;
@@ -170,7 +182,17 @@ public final class PeerManager implements NetworkGateway {
             while (!peer.socket.isClosed()) {
                 ControlMessage message = TcpService.readControl(input);
                 if (message != null && message.type() != ControlMessage.Type.HELLO) {
-                    controlCallback.accept(message);
+                    if (!peer.id.equals(message.senderId())) {
+                        throw new IOException(
+                                "Sender ID does not match connected peer: " + peer.id);
+                    }
+
+                    try {
+                        controlCallback.accept(message);
+                    } catch (RuntimeException e) {
+                        System.err.println(
+                                "TCP callback from peer " + peer.id + ": " + e);
+                    }
                 }
             }
         } catch (IOException e) {
@@ -179,9 +201,14 @@ public final class PeerManager implements NetworkGateway {
             }
         } finally {
             heartbeat.interrupt();
+
             synchronized (this) {
-                peers.remove(peer.id, peer);
+                boolean removed = peers.remove(peer.id, peer);
                 release(peer.socket);
+
+                if (removed) {
+                    enqueuePeerEvent(peerDisconnectedCallback, peer.id);
+                }
             }
         }
     }
@@ -287,20 +314,57 @@ public final class PeerManager implements NetworkGateway {
     }
 
     @Override
+    public synchronized Set<String> connectedPeerIds() {
+        return Set.copyOf(peers.keySet());
+    }
+
+    @Override
+    public void onPeerConnected(Consumer<String> callback) {
+        peerConnectedCallback = Objects.requireNonNull(callback);
+    }
+
+    @Override
+    public void onPeerDisconnected(Consumer<String> callback) {
+        peerDisconnectedCallback = Objects.requireNonNull(callback);
+    }
+
+    private synchronized void enqueuePeerEvent(
+            Consumer<String> callback, String peerId) {
+
+        peerEvents = peerEvents.handleAsync((ignored, previousError) -> {
+            try {
+                callback.accept(peerId);
+            } catch (RuntimeException e) {
+                System.err.println(
+                        "Peer status callback for " + peerId + ": " + e);
+            }
+            return null;
+        }, task -> Thread.ofVirtual().name("peer-event").start(task));
+    }
+
+    @Override
     public synchronized void disconnect() {
         if (listener != null) {
             TcpService.close(listener);
             listener = null;
         }
+
         if (udp != null) {
             udp.close();
             udp = null;
         }
+
         connections.forEach(TcpService::close);
         connections.clear();
+
+        for (String peerId : peers.keySet()) {
+            enqueuePeerEvent(peerDisconnectedCallback, peerId);
+        }
+
         peers.clear();
     }
 
     private record Peer(String id, Socket socket, InetSocketAddress udpAddress,
-                        DataOutputStream output, boolean outgoing) {}
+            DataOutputStream output, boolean outgoing) {
+    }
 }

@@ -1,0 +1,75 @@
+package com.voicechat.integration;
+
+import com.voicechat.audio.VoiceService;
+import com.voicechat.network.PeerManager;
+import com.voicechat.ui.ChatFrame;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.util.Objects;
+import java.util.function.Consumer;
+import javax.swing.JFrame;
+import javax.swing.SwingUtilities;
+
+/** Khoi tao mot phien desktop tu LoginFrame; duoc goi tren EDT. */
+public final class DesktopSession implements AutoCloseable {
+    private final PeerManager network;
+    private final CallCoordinator calls;
+    private final ChatFrame frame;
+    private boolean closed;
+
+    public DesktopSession(String username) {
+        requireEdt();
+        if (Objects.requireNonNull(username).isBlank()) {
+            throw new IllegalArgumentException("Tên người dùng không được rỗng");
+        }
+        network = new PeerManager(username);
+        VoiceService voice = new VoiceService(network);
+        frame = new ChatFrame(username, false);
+        calls = new CallCoordinator(network, voice, username, frame);
+        frame.bindCalls(calls);
+        frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        frame.addWindowListener(new WindowAdapter() {
+            @Override public void windowClosing(WindowEvent event) {
+                close();
+            }
+        });
+    }
+
+    public void open(int localTcpPort, int localUdpPort, boolean waitForPeer,
+                     String peerHost, int peerTcpPort,
+                     Runnable onReady, Consumer<Exception> onFailure) {
+        requireEdt();
+        Objects.requireNonNull(onReady);
+        Objects.requireNonNull(onFailure);
+        if (closed) throw new IllegalStateException("Phiên đã đóng");
+
+        calls.open(() -> {
+            network.startListening(localTcpPort, localUdpPort);
+            System.out.printf("LISTEN %s TCP=%d UDP=%d%n",
+                    network.localPeerId(), localTcpPort, localUdpPort);
+            if (!waitForPeer) network.connect(peerHost, peerTcpPort);
+        }, () -> {
+            if (closed) return;
+            frame.setVisible(true);
+            onReady.run();
+        }, error -> {
+            if (closed) return;
+            close();
+            onFailure.accept(error);
+        });
+    }
+
+    @Override public void close() {
+        requireEdt();
+        if (closed) return;
+        closed = true;
+        frame.dispose();
+        calls.close();
+    }
+
+    private static void requireEdt() {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            throw new IllegalStateException("DesktopSession phải được gọi trên EDT");
+        }
+    }
+}

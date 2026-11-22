@@ -15,27 +15,33 @@ import java.util.List;
 
 /**
  * VoiceLink SidebarPanel: Thanh bên danh bạ và nhóm chat phong cách VoiceLink.
- * <p>Chiều rộng 260px, nền trắng tinh (C_CARD_BG), viền phải mảnh 1px (C_BORDER).
- * Các mục chat bo góc 10px, có AvatarBadge với màu pastel và chấm trạng thái Online/Offline.</p>
+ * <p>
+ * Chiều rộng 260px, nền trắng tinh (C_CARD_BG), viền phải mảnh 1px (C_BORDER).
+ * Các mục chat bo góc 10px, có AvatarBadge với màu pastel và chấm trạng thái
+ * Online/Offline.
+ * </p>
  */
 public final class SidebarPanel extends JPanel {
 
     // ── Callback giao tiếp với ChatFrame ─────────────────────────
     public interface SelectionListener {
         void onPeerSelected(PeerInfo peer);
+
         void onRoomSelected(RoomInfo room);
+
         void onHistoryRequested();
+
         void onCreateGroupRequested();
     }
 
     // ── State ─────────────────────────────────────────────────────
     private final SelectionListener listener;
-    private final JPanel            peerListPanel = new JPanel();
-    private final JPanel            roomListPanel = new JPanel();
+    private final JPanel peerListPanel = new JPanel();
+    private final JPanel roomListPanel = new JPanel();
     private final UiUtils.RoundedTextField searchField = new UiUtils.RoundedTextField("Tìm bạn bè hoặc nhóm...");
-    private List<PeerInfo>          allPeers      = new ArrayList<>();
-    private List<RoomInfo>          allRooms      = new ArrayList<>();
-    private Object                  selectedItem  = null; // PeerInfo | RoomInfo
+    private List<PeerInfo> allPeers = new ArrayList<>();
+    private List<RoomInfo> allRooms = new ArrayList<>();
+    private Object selectedItem = null; // PeerInfo | RoomInfo
 
     public SidebarPanel(SelectionListener listener) {
         this.listener = listener;
@@ -45,9 +51,9 @@ public final class SidebarPanel extends JPanel {
         // Đường kẻ mảnh 1px ngăn cách cột bên phải
         setBorder(new MatteBorder(0, 0, 0, 1, UiUtils.C_BORDER));
 
-        add(buildTopBar(),         BorderLayout.NORTH);
+        add(buildTopBar(), BorderLayout.NORTH);
         add(buildScrollableList(), BorderLayout.CENTER);
-        add(buildBottomToolbar(),  BorderLayout.SOUTH);
+        add(buildBottomToolbar(), BorderLayout.SOUTH);
     }
 
     // ── Top bar: Tiêu đề + Nút Tạo nhóm + Search box ──────────────
@@ -84,7 +90,8 @@ public final class SidebarPanel extends JPanel {
         addBtn.setFont(new Font("Segoe UI", Font.BOLD, 16));
         addBtn.setToolTipText("Tạo nhóm trò chuyện mới");
         addBtn.addActionListener(e -> {
-            if (listener != null) listener.onCreateGroupRequested();
+            if (listener != null)
+                listener.onCreateGroupRequested();
         });
         titleBar.add(addBtn, BorderLayout.EAST);
         top.add(titleBar);
@@ -98,9 +105,20 @@ public final class SidebarPanel extends JPanel {
         searchField.setBgColor(UiUtils.C_SIDEBAR_LIGHT);
         searchField.setPreferredSize(new Dimension(230, 34));
         searchField.getDocument().addDocumentListener(new DocumentListener() {
-            @Override public void insertUpdate(DocumentEvent e)  { applyFilter(searchField.getText().trim().toLowerCase()); }
-            @Override public void removeUpdate(DocumentEvent e)  { applyFilter(searchField.getText().trim().toLowerCase()); }
-            @Override public void changedUpdate(DocumentEvent e) { applyFilter(searchField.getText().trim().toLowerCase()); }
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                applyFilter(searchField.getText().trim().toLowerCase());
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                applyFilter(searchField.getText().trim().toLowerCase());
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                applyFilter(searchField.getText().trim().toLowerCase());
+            }
         });
         searchWrap.add(searchField, BorderLayout.CENTER);
         top.add(searchWrap);
@@ -163,13 +181,12 @@ public final class SidebarPanel extends JPanel {
     // ── Item Peer (Chat 1-1) ──────────────────────────────────────
     private JPanel buildPeerItem(PeerInfo peer) {
         boolean isSelected = peer.equals(selectedItem);
-        boolean isOnline   = (Math.abs(peer.username().hashCode()) % 3 != 0);
+        boolean isOnline = true; // Danh sach nay chi gom cac peer dang ket noi.
 
         UiUtils.RoundedPanel item = new UiUtils.RoundedPanel(
                 UiUtils.ARC_SM,
                 isSelected ? UiUtils.C_SELECTED_BG : UiUtils.C_CARD_BG,
-                isSelected ? UiUtils.C_BORDER_FOCUS : null
-        );
+                isSelected ? UiUtils.C_BORDER_FOCUS : null);
         item.setLayout(new BorderLayout(10, 0));
         item.setBorder(new EmptyBorder(8, 8, 8, 8));
         item.setMaximumSize(new Dimension(Integer.MAX_VALUE, 58));
@@ -216,7 +233,8 @@ public final class SidebarPanel extends JPanel {
                 selectedItem = peer;
                 refreshPeerList(currentFilter());
                 refreshRoomList(currentFilter());
-                if (listener != null) listener.onPeerSelected(peer);
+                if (listener != null)
+                    listener.onPeerSelected(peer);
             }
         });
 
@@ -230,8 +248,7 @@ public final class SidebarPanel extends JPanel {
         UiUtils.RoundedPanel item = new UiUtils.RoundedPanel(
                 UiUtils.ARC_SM,
                 isSelected ? UiUtils.C_SELECTED_BG : UiUtils.C_CARD_BG,
-                isSelected ? UiUtils.C_BORDER_FOCUS : null
-        );
+                isSelected ? UiUtils.C_BORDER_FOCUS : null);
         item.setLayout(new BorderLayout(10, 0));
         item.setBorder(new EmptyBorder(8, 8, 8, 8));
         item.setMaximumSize(new Dimension(Integer.MAX_VALUE, 58));
@@ -275,7 +292,8 @@ public final class SidebarPanel extends JPanel {
                 selectedItem = room;
                 refreshPeerList(currentFilter());
                 refreshRoomList(currentFilter());
-                if (listener != null) listener.onRoomSelected(room);
+                if (listener != null)
+                    listener.onRoomSelected(room);
             }
         });
 
@@ -288,8 +306,7 @@ public final class SidebarPanel extends JPanel {
         bar.setBackground(UiUtils.C_CARD_BG);
         bar.setBorder(BorderFactory.createCompoundBorder(
                 new MatteBorder(1, 0, 0, 0, UiUtils.C_BORDER),
-                new EmptyBorder(10, 12, 10, 12)
-        ));
+                new EmptyBorder(10, 12, 10, 12)));
 
         UiUtils.RoundedButton historyBtn = new UiUtils.RoundedButton(
                 "Lịch sử", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY, UiUtils.ARC_SM);
@@ -299,13 +316,15 @@ public final class SidebarPanel extends JPanel {
             selectedItem = null;
             refreshPeerList(currentFilter());
             refreshRoomList(currentFilter());
-            if (listener != null) listener.onHistoryRequested();
+            if (listener != null)
+                listener.onHistoryRequested();
         });
 
         UiUtils.RoundedButton groupBtn = new UiUtils.RoundedButton(
                 "+ Tạo nhóm", UiUtils.C_PRIMARY_LIGHT, UiUtils.C_PRIMARY, UiUtils.ARC_SM);
         groupBtn.addActionListener(e -> {
-            if (listener != null) listener.onCreateGroupRequested();
+            if (listener != null)
+                listener.onCreateGroupRequested();
         });
 
         bar.add(historyBtn);
@@ -356,7 +375,8 @@ public final class SidebarPanel extends JPanel {
                 any = true;
             }
         }
-        if (!any) peerListPanel.add(buildEmptyHint("Chưa có liên hệ nào"));
+        if (!any)
+            peerListPanel.add(buildEmptyHint("Chưa có liên hệ nào"));
         peerListPanel.revalidate();
         peerListPanel.repaint();
     }
@@ -371,7 +391,8 @@ public final class SidebarPanel extends JPanel {
                 any = true;
             }
         }
-        if (!any) roomListPanel.add(buildEmptyHint("Chưa có nhóm nào"));
+        if (!any)
+            roomListPanel.add(buildEmptyHint("Chưa có nhóm nào"));
         roomListPanel.revalidate();
         roomListPanel.repaint();
     }
@@ -390,13 +411,21 @@ public final class SidebarPanel extends JPanel {
         private static final Color THUMB = new Color(0x94, 0xA3, 0xB8, 140);
         private static final Color TRACK = Color.WHITE;
 
-        @Override protected void configureScrollBarColors() {
+        @Override
+        protected void configureScrollBarColors() {
             thumbColor = THUMB;
             trackColor = TRACK;
         }
 
-        @Override protected JButton createDecreaseButton(int o) { return zeroButton(); }
-        @Override protected JButton createIncreaseButton(int o) { return zeroButton(); }
+        @Override
+        protected JButton createDecreaseButton(int o) {
+            return zeroButton();
+        }
+
+        @Override
+        protected JButton createIncreaseButton(int o) {
+            return zeroButton();
+        }
 
         private static JButton zeroButton() {
             JButton b = new JButton();
@@ -407,7 +436,8 @@ public final class SidebarPanel extends JPanel {
 
         @Override
         protected void paintThumb(Graphics g, JComponent c, Rectangle r) {
-            if (r.isEmpty()) return;
+            if (r.isEmpty())
+                return;
             Graphics2D g2 = (Graphics2D) g.create();
             UiUtils.enableAntiAliasing(g2);
             g2.setColor(THUMB);
