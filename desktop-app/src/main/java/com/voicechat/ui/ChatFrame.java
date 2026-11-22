@@ -1,5 +1,6 @@
 package com.voicechat.ui;
 
+import com.voicechat.integration.CallCoordinator;
 import com.voicechat.common.model.ChatMessage;
 import com.voicechat.common.model.PeerInfo;
 import com.voicechat.common.model.RoomInfo;
@@ -20,7 +21,7 @@ import java.util.List;
  * kèm thanh trạng thái thanh lịch ở đáy.
  * </p>
  */
-public final class ChatFrame extends JFrame implements SidebarPanel.SelectionListener {
+public final class ChatFrame extends JFrame implements SidebarPanel.SelectionListener, CallCoordinator.View {
 
     private static final String CARD_WELCOME = "WELCOME";
     private static final String CARD_HISTORY = "HISTORY";
@@ -41,8 +42,15 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
     private final List<ChatMessage> chatHistory = new ArrayList<>();
     private final List<RoomInfo> demoRooms = new ArrayList<>();
     private PeerInfo currentCallPeer = null;
+    private CallCoordinator calls;
+    private IncomingCallDialog incomingDialog;
+    private JLabel statusText;
 
     public ChatFrame(String localUsername) {
+        this(localUsername, true);
+    }
+
+    public ChatFrame(String localUsername, boolean demoMode) {
         super("VoiceLink P2P — " + localUsername);
         this.localUsername = localUsername;
         this.localUserId = localUsername;
@@ -62,7 +70,13 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
         root.add(buildStatusBar(), BorderLayout.SOUTH);
         setContentPane(root);
 
-        loadDemoData();
+        if (demoMode) {
+            loadDemoData();
+        } else {
+            sidebarPanel.setPeers(List.of());
+            sidebarPanel.setRooms(List.of());
+            statusText.setText("Đang khởi tạo kết nối...");
+        }
     }
 
     private JPanel buildContentArea() {
@@ -141,7 +155,7 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
         dot.setFont(new Font("Segoe UI", Font.BOLD, 12));
         dot.setForeground(UiUtils.C_ONLINE);
 
-        JLabel statusText = new JLabel(localUsername + "  •  Sẵn sàng kết nối P2P");
+        statusText = new JLabel(localUsername + "  •  Sẵn sàng kết nối P2P");
         statusText.setFont(UiUtils.F_SMALL);
         statusText.setForeground(UiUtils.C_TEXT_MUTED);
 
@@ -283,9 +297,11 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
 
             @Override
             public void onCallRequested(PeerInfo peer) {
-                currentCallPeer = peer;
-                callPanel.setState(CallPanel.CallState.RINGING, peer.username());
-                cardLayout.show(contentPanel, CARD_CALL);
+                if (calls != null) {
+                    calls.requestCall(peer);
+                } else {
+                    error("Chưa kết nối dịch vụ gọi thoại.");
+                }
             }
         };
     }
@@ -310,19 +326,24 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
         return new CallPanel.CallListener() {
             @Override
             public void onCallCancelled() {
-                cardLayout.show(contentPanel, CARD_WELCOME);
-                currentCallPeer = null;
+                if (calls != null)
+                    calls.endCall();
+                else
+                    ChatFrame.this.onCallEnded();
             }
 
             @Override
             public void onCallEnded() {
-                cardLayout.show(contentPanel, CARD_WELCOME);
-                currentCallPeer = null;
+                if (calls != null)
+                    calls.endCall();
+                else
+                    ChatFrame.this.onCallEnded();
             }
 
             @Override
             public void onMuteToggled(boolean muted) {
-                // Sẽ kích hoạt voiceGateway.setMuted(muted) khi nối core
+                if (calls != null)
+                    calls.setMuted(muted);
             }
         };
     }
@@ -344,7 +365,18 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
     }
 
     public void setPeers(List<PeerInfo> peers) {
-        SwingUtilities.invokeLater(() -> sidebarPanel.setPeers(peers));
+        Runnable update = () -> {
+            sidebarPanel.setPeers(peers);
+            Set<String> online = new HashSet<>();
+            for (PeerInfo peer : peers)
+                online.add(peer.id());
+            directChats.forEach((id, panel) -> panel.setConnected(online.contains(id)));
+            statusText.setText("Đang kết nối với " + peers.size() + " peer.");
+        };
+        if (SwingUtilities.isEventDispatchThread())
+            update.run();
+        else
+            SwingUtilities.invokeLater(update);
     }
 
     public void setRooms(List<RoomInfo> rooms) {
@@ -379,6 +411,71 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
             currentCallPeer = null;
         } else {
             cardLayout.show(contentPanel, CARD_WELCOME);
+        }
+    }
+
+    public void bindCalls(CallCoordinator calls) {
+        this.calls = Objects.requireNonNull(calls);
+    }
+
+    @Override
+    public void outgoing(PeerInfo peer) {
+        currentCallPeer = peer;
+        callPanel.setState(CallPanel.CallState.RINGING, peer.username());
+        cardLayout.show(contentPanel, CARD_CALL);
+        statusText.setText("Đang gọi " + peer.username());
+    }
+
+    @Override
+    public void incoming(PeerInfo peer, String callId) {
+        closeIncomingDialog();
+        currentCallPeer = peer;
+        incomingDialog = new IncomingCallDialog(this, peer.username(),
+                new IncomingCallDialog.ResponseListener() {
+                    @Override
+                    public void onAccepted() {
+                        calls.accept(callId);
+                    }
+
+                    @Override
+                    public void onRejected() {
+                        calls.reject(callId);
+                    }
+                });
+        incomingDialog.setVisible(true);
+    }
+
+    @Override
+    public void connected(PeerInfo peer) {
+        closeIncomingDialog();
+        currentCallPeer = peer;
+        callPanel.setMuteState(false);
+        callPanel.setState(CallPanel.CallState.IN_CALL, peer.username());
+        cardLayout.show(contentPanel, CARD_CALL);
+        statusText.setText("Đang gọi với " + peer.username());
+    }
+
+    @Override
+    public void idle(String message) {
+        closeIncomingDialog();
+        onCallEnded();
+        statusText.setText(message);
+    }
+
+    @Override
+    public void muted(boolean value) {
+        callPanel.setMuteState(value);
+    }
+
+    @Override
+    public void error(String message) {
+        JOptionPane.showMessageDialog(this, message, "Cuộc gọi", JOptionPane.ERROR_MESSAGE);
+    }
+
+    private void closeIncomingDialog() {
+        if (incomingDialog != null) {
+            incomingDialog.dispose();
+            incomingDialog = null;
         }
     }
 

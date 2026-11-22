@@ -1,4 +1,101 @@
 package com.voicechat.audio;
 
-/** TV2 TODO: TargetDataLine, PCM 16 kHz, mono, 16 bit. */
-public final class AudioCapture { }
+import java.util.Objects;
+import java.util.function.Consumer;
+
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.LineUnavailableException;
+import javax.sound.sampled.TargetDataLine;
+
+public final class AudioCapture {
+
+    // Luồng điều khiển và luồng đọc mic cùng truy cập biến này.
+    private volatile TargetDataLine line;
+
+    public synchronized void start(Consumer<byte[]> onAudio)
+            throws LineUnavailableException {
+
+        Objects.requireNonNull(onAudio, "onAudio không được null");
+
+        if (line != null) {
+            throw new IllegalStateException("Microphone đang thu âm");
+        }
+
+        TargetDataLine input = AudioSystem.getTargetDataLine(AudioConfig.FORMAT);
+
+        try {
+            // Bộ đệm thiết bị: yêu cầu khoảng 100 ms.
+            input.open(
+                    AudioConfig.FORMAT,
+                    AudioConfig.CHUNK_BYTES * 5);
+
+            input.start();
+            line = input;
+
+            Thread.ofPlatform()
+                    .name("audio-capture")
+                    .daemon()
+                    .start(() -> readLoop(input, onAudio));
+
+        } catch (LineUnavailableException | RuntimeException e) {
+            line = null;
+            input.close();
+            throw e;
+        }
+    }
+
+    private void readLoop(
+            TargetDataLine input,
+            Consumer<byte[]> onAudio) {
+
+        byte[] chunk = new byte[AudioConfig.CHUNK_BYTES];
+        int offset = 0;
+
+        try {
+            while (line == input) {
+                int n = input.read(
+                        chunk,
+                        offset,
+                        chunk.length - offset);
+
+                // Dừng nếu thiết bị đã đóng hoặc phiên thu đã đổi.
+                if (n <= 0 || line != input) {
+                    break;
+                }
+
+                offset += n;
+
+                if (offset == chunk.length) {
+                    onAudio.accept(chunk.clone());
+                    offset = 0;
+                }
+            }
+        } catch (RuntimeException e) {
+            // Không báo lỗi khi read() kết thúc do stop().
+            if (line == input) {
+                System.err.println("Lỗi thu âm: " + e);
+            }
+        } finally {
+            release(input);
+        }
+    }
+
+    private synchronized void release(TargetDataLine input) {
+        // Luồng cũ không được xóa trạng thái của phiên thu mới.
+        if (line == input) {
+            line = null;
+        }
+
+        input.close();
+    }
+
+    public synchronized void stop() {
+        TargetDataLine input = line;
+        line = null;
+
+        if (input != null) {
+            input.stop();
+            input.close();
+        }
+    }
+}
