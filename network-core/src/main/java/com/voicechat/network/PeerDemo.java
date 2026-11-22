@@ -11,7 +11,7 @@ public final class PeerDemo {
     private static final String FIRST = "Chào bạn, tiếng Việt!";
     private static final String SECOND = "Tin nhắn thứ hai: kết nối ổn định.";
     private static final String REPLY = "Đã nhận đủ hai tin nhắn.";
-    private static final byte[] VOICE = {1, 2, 3};
+    private static final byte[] VOICE = { 1, 2, 3 };
 
     public static void main(String[] args) throws Exception {
         if (args.length < 3 || !(args[0].equals("A") || args[0].equals("B"))
@@ -23,6 +23,9 @@ public final class PeerDemo {
         int tcp = Integer.parseInt(args[1]);
         int udp = Integer.parseInt(args[2]);
         var manager = new PeerManager(id);
+        manager.onPeerConnected(peerId -> System.out.println("CONNECTED: " + peerId));
+
+        manager.onPeerDisconnected(peerId -> System.out.println("DISCONNECTED: " + peerId));
         var finished = new CountDownLatch(caller ? 2 : 3);
         var received = new java.util.concurrent.LinkedBlockingQueue<String>();
         manager.onControlMessage(message -> {
