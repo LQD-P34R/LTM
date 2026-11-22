@@ -1,5 +1,6 @@
 package com.voicechat.ui;
 
+import com.voicechat.integration.DesktopSession;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
@@ -12,6 +13,13 @@ import java.awt.event.*;
  */
 public final class LoginFrame extends JFrame {
 
+    private DesktopSession pendingSession;
+    private final JCheckBox waitForPeer = new JCheckBox("Chờ peer kết nối đến");
+    private final UiUtils.RoundedTextField tfLocalTcp =
+            new UiUtils.RoundedTextField("Cổng TCP của máy này");
+    private final UiUtils.RoundedTextField tfLocalUdp =
+            new UiUtils.RoundedTextField("Cổng UDP của máy này");
+
     // ── Widgets ───────────────────────────────────────────────────
     private final UiUtils.RoundedTextField tfUsername = new UiUtils.RoundedTextField("Nhập tên người dùng...");
     private final UiUtils.RoundedTextField tfIp       = new UiUtils.RoundedTextField("Ví dụ: 127.0.0.1");
@@ -23,9 +31,17 @@ public final class LoginFrame extends JFrame {
 
     public LoginFrame() {
         super("VoiceLink P2P — Đăng nhập");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(500, 580);
-        setMinimumSize(new Dimension(460, 540));
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        addWindowListener(new WindowAdapter() {
+            @Override public void windowClosing(WindowEvent event) {
+                if (pendingSession != null) {
+                    pendingSession.close();
+                    pendingSession = null;
+                }
+            }
+        });
+        setSize(560, 780);
+        setMinimumSize(new Dimension(540, 740));
         setLocationRelativeTo(null);
 
         // Nền tổng thể sáng dịu mắt (Slate-50)
@@ -40,6 +56,9 @@ public final class LoginFrame extends JFrame {
         tfUsername.addActionListener(connectAction);
         tfIp.addActionListener(connectAction);
         tfPort.addActionListener(connectAction);
+        tfLocalTcp.addActionListener(connectAction);
+        tfLocalUdp.addActionListener(connectAction);
+        waitForPeer.addActionListener(e -> updatePeerFields());
         btnConnect.addActionListener(connectAction);
     }
 
@@ -49,8 +68,8 @@ public final class LoginFrame extends JFrame {
                 UiUtils.ARC_LG, UiUtils.C_CARD_BG, UiUtils.C_BORDER, true);
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setBorder(new EmptyBorder(32, 40, 32, 40));
-        card.setPreferredSize(new Dimension(420, 500));
-        card.setMaximumSize(new Dimension(420, 500));
+        card.setPreferredSize(new Dimension(460, 680));
+        card.setMaximumSize(new Dimension(460, 680));
 
         // 1. Logo Badge hình tròn
         JPanel logoPanel = new JPanel() {
@@ -96,13 +115,30 @@ public final class LoginFrame extends JFrame {
         // 3. Các ô nhập liệu
         tfUsername.setText("User_A");
         tfIp.setText("127.0.0.1");
-        tfPort.setText("5000");
+        tfPort.setText("5100");
+        tfLocalTcp.setText("5101");
+        tfLocalUdp.setText("6101");
 
         card.add(buildFieldGroup("Tên người dùng", tfUsername));
         card.add(Box.createVerticalStrut(12));
+        JPanel localPorts = new JPanel(new GridLayout(1, 2, 12, 0));
+        localPorts.setOpaque(false);
+        localPorts.setAlignmentX(Component.LEFT_ALIGNMENT);
+        localPorts.setMaximumSize(new Dimension(Integer.MAX_VALUE, 64));
+        localPorts.add(buildFieldGroup("TCP máy này", tfLocalTcp));
+        localPorts.add(buildFieldGroup("UDP máy này", tfLocalUdp));
+        card.add(localPorts);
+        card.add(Box.createVerticalStrut(12));
+
+        waitForPeer.setOpaque(false);
+        waitForPeer.setFont(UiUtils.F_SMALL);
+        waitForPeer.setAlignmentX(Component.LEFT_ALIGNMENT);
+        card.add(waitForPeer);
+        card.add(Box.createVerticalStrut(12));
+
         card.add(buildFieldGroup("Địa chỉ IP peer", tfIp));
         card.add(Box.createVerticalStrut(12));
-        card.add(buildFieldGroup("Cổng TCP", tfPort));
+        card.add(buildFieldGroup("Cổng TCP của peer", tfPort));
         card.add(Box.createVerticalStrut(20));
 
         // 4. Nút đăng nhập Full-width
@@ -156,82 +192,87 @@ public final class LoginFrame extends JFrame {
 
     // ── Logic kết nối ─────────────────────────────────────────────
     private void attemptConnect() {
+        if (pendingSession != null) return;
         showError("");
 
         String username = tfUsername.getText().trim();
-        String ip       = tfIp.getText().trim();
-        String portStr  = tfPort.getText().trim();
-
-        // Validate username
-        if (username.isEmpty()) {
-            showError("⚠  Tên người dùng không được để trống.");
-            tfUsername.requestFocusInWindow();
-            return;
-        }
+        String host = tfIp.getText().trim();
+        boolean waiting = waitForPeer.isSelected();
         if (username.length() < 2) {
-            showError("⚠  Tên người dùng phải có ít nhất 2 ký tự.");
+            showError("Tên người dùng cần ít nhất 2 ký tự.");
             tfUsername.requestFocusInWindow();
             return;
         }
 
-        // Validate IP
-        if (!ip.matches("^[\\w.:\\-]+$")) {
-            showError("⚠  Địa chỉ IP không hợp lệ.");
+        final int localTcp;
+        final int localUdp;
+        final int remoteTcp;
+        try {
+            localTcp = readPort(tfLocalTcp, "TCP máy này");
+            localUdp = readPort(tfLocalUdp, "UDP máy này");
+            remoteTcp = waiting ? 0 : readPort(tfPort, "TCP của peer");
+        } catch (IllegalArgumentException e) {
+            showError(e.getMessage());
+            return;
+        }
+        if (!waiting && !host.matches("^[\\w.:\\-]+$")) {
+            showError("Địa chỉ peer không hợp lệ.");
             tfIp.requestFocusInWindow();
             return;
         }
 
-        // Validate port
-        int port;
-        try {
-            port = Integer.parseInt(portStr);
-            if (port < 1 || port > 65535) throw new NumberFormatException();
-        } catch (NumberFormatException ex) {
-            showError("⚠  Cổng phải là số nguyên từ 1 đến 65535.");
-            tfPort.requestFocusInWindow();
-            return;
-        }
-
-        // Giả lập kết nối bằng SwingWorker
         setFormEnabled(false);
         progress.setVisible(true);
+        try {
+            DesktopSession session = new DesktopSession(username);
+            pendingSession = session;
+            session.open(localTcp, localUdp, waiting, host, remoteTcp,
+                    () -> {
+                        pendingSession = null;
+                        progress.setVisible(false);
+                        dispose();
+                    }, error -> {
+                        pendingSession = null;
+                        progress.setVisible(false);
+                        setFormEnabled(true);
+                        showError("Không thể kết nối: " + error.getMessage());
+                    });
+        } catch (RuntimeException e) {
+            if (pendingSession != null) pendingSession.close();
+            pendingSession = null;
+            progress.setVisible(false);
+            setFormEnabled(true);
+            showError("Không thể khởi tạo: " + e.getMessage());
+        }
+    }
 
-        final String finalUsername = username;
+    private int readPort(JTextField field, String label) {
+        try {
+            int port = Integer.parseInt(field.getText().trim());
+            if (port < 1 || port > 65535) throw new NumberFormatException();
+            return port;
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(label + " phải từ 1 đến 65535.");
+        }
+    }
 
-        new SwingWorker<Void, Void>() {
-            @Override
-            protected Void doInBackground() throws Exception {
-                /*
-                 * TODO (TV1 integration): thay dòng Thread.sleep bằng:
-                 *   AppCoordinator.getInstance().connect(finalIp, finalPort);
-                 */
-                Thread.sleep(600);
-                return null;
-            }
-
-            @Override
-            protected void done() {
-                progress.setVisible(false);
-                try {
-                    get();
-                    new ChatFrame(finalUsername).setVisible(true);
-                    dispose();
-                } catch (Exception ex) {
-                    setFormEnabled(true);
-                    showError("⚠  Không thể kết nối: " + ex.getMessage());
-                }
-            }
-        }.execute();
+    private void updatePeerFields() {
+        boolean enabled = waitForPeer.isEnabled() && !waitForPeer.isSelected();
+        tfIp.setEnabled(enabled);
+        tfPort.setEnabled(enabled);
     }
 
     private void setFormEnabled(boolean enabled) {
         tfUsername.setEnabled(enabled);
-        tfIp.setEnabled(enabled);
-        tfPort.setEnabled(enabled);
+        tfLocalTcp.setEnabled(enabled);
+        tfLocalUdp.setEnabled(enabled);
+        waitForPeer.setEnabled(enabled);
         btnConnect.setEnabled(enabled);
+        updatePeerFields();
     }
 
     private void showError(String msg) {
         lblError.setText(msg.isEmpty() ? " " : msg);
+        lblError.setToolTipText(msg);
     }
 }
