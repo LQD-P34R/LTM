@@ -21,15 +21,23 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import javax.swing.SwingUtilities;
 
-/** Dieu phoi mot cuoc goi. Tat ca trang thai chi doi tren luong call-control. */
+/**
+ * Dieu phoi mot cuoc goi. Tat ca trang thai chi doi tren luong call-control.
+ */
 public final class CallCoordinator implements AutoCloseable {
     public interface View {
         void outgoing(PeerInfo peer);
+
         void incoming(PeerInfo peer, String callId);
+
         void connected(PeerInfo peer);
+
         void idle(String message);
+
         void muted(boolean muted);
+
         void error(String message);
+
         void setPeers(List<PeerInfo> peers);
     }
 
@@ -38,7 +46,9 @@ public final class CallCoordinator implements AutoCloseable {
         void run() throws IOException;
     }
 
-    private enum Phase { OUTGOING, INCOMING, ACTIVE }
+    private enum Phase {
+        OUTGOING, INCOMING, ACTIVE
+    }
 
     private static final class Call {
         final String id;
@@ -59,23 +69,24 @@ public final class CallCoordinator implements AutoCloseable {
     private final View view;
     private final Executor ui;
     private final Duration ringTimeout;
-    private final ScheduledExecutorService loop =
-            Executors.newSingleThreadScheduledExecutor(
-                    Thread.ofPlatform().name("call-control").factory());
+    private final ScheduledExecutorService loop = Executors.newSingleThreadScheduledExecutor(
+            Thread.ofPlatform().name("call-control").factory());
     private final AtomicBoolean closing = new AtomicBoolean();
     private final CompletableFuture<Void> closed = new CompletableFuture<>();
     private Call call;
+    private volatile Consumer<ControlMessage> chatHandler = message -> {
+    };
 
     public CallCoordinator(NetworkGateway network, VoiceGateway voice,
-                           String localId, View view) {
+            String localId, View view) {
         this(network, voice, localId, view,
                 SwingUtilities::invokeLater, Duration.ofSeconds(30));
     }
 
     // Overload de test khong can cua so Swing hoac cho 30 giay.
     public CallCoordinator(NetworkGateway network, VoiceGateway voice,
-                           String localId, View view, Executor ui,
-                           Duration ringTimeout) {
+            String localId, View view, Executor ui,
+            Duration ringTimeout) {
         this.network = Objects.requireNonNull(network);
         this.voice = Objects.requireNonNull(voice);
         this.localId = Objects.requireNonNull(localId);
@@ -96,13 +107,14 @@ public final class CallCoordinator implements AutoCloseable {
     }
 
     public void open(ConnectionAction connect) {
-        open(connect, () -> { }, error -> view.error(
+        open(connect, () -> {
+        }, error -> view.error(
                 "Không thể mở kết nối: " + error.getMessage()));
     }
 
     /** Ca hai callback chay tren EDT voi constructor mac dinh. */
     public void open(ConnectionAction connect, Runnable onReady,
-                     Consumer<Exception> onFailure) {
+            Consumer<Exception> onFailure) {
         Objects.requireNonNull(connect);
         Objects.requireNonNull(onReady);
         Objects.requireNonNull(onFailure);
@@ -146,7 +158,8 @@ public final class CallCoordinator implements AutoCloseable {
         submit(() -> {
             Call incoming = call;
             if (incoming == null || incoming.phase != Phase.INCOMING
-                    || !incoming.id.equals(callId)) return;
+                    || !incoming.id.equals(callId))
+                return;
             try {
                 // Mo thiet bi thanh cong roi moi bao chap nhan cho ben kia.
                 voice.startCall(incoming.peer.id());
@@ -189,10 +202,18 @@ public final class CallCoordinator implements AutoCloseable {
     private void receive(ControlMessage message) {
         if (message == null || message.type() == null
                 || !localId.equals(message.targetId())
-                || !network.connectedPeerIds().contains(message.senderId())) return;
+                || !network.connectedPeerIds().contains(message.senderId()))
+            return;
         switch (message.type()) {
-            case CALL_REQUEST, CALL_ACCEPT, CALL_REJECT, CALL_END -> { }
-            default -> { return; } // AppCoordinator se route CHAT/ROOM tai day.
+            case CHAT -> {
+                chatHandler.accept(message);
+                return;
+            }
+            case CALL_REQUEST, CALL_ACCEPT, CALL_REJECT, CALL_END -> {
+            }
+            default -> {
+                return;
+            }
         }
         try {
             UUID.fromString(message.payload());
@@ -215,7 +236,8 @@ public final class CallCoordinator implements AutoCloseable {
             notifyUi(() -> view.incoming(incoming.peer, incoming.id));
             return;
         }
-        if (!matches(message)) return; // Bo ACCEPT/END cua cuoc goi cu.
+        if (!matches(message))
+            return; // Bo ACCEPT/END cua cuoc goi cu.
         switch (message.type()) {
             case CALL_ACCEPT -> {
                 if (call.phase == Phase.OUTGOING) {
@@ -228,10 +250,12 @@ public final class CallCoordinator implements AutoCloseable {
                 }
             }
             case CALL_REJECT -> {
-                if (call.phase == Phase.OUTGOING) finish("Đối phương từ chối hoặc đang bận.");
+                if (call.phase == Phase.OUTGOING)
+                    finish("Đối phương từ chối hoặc đang bận.");
             }
             case CALL_END -> finish("Đối phương đã kết thúc cuộc gọi.");
-            default -> { }
+            default -> {
+            }
         }
     }
 
@@ -242,7 +266,8 @@ public final class CallCoordinator implements AutoCloseable {
 
     private void activate(Call active) {
         active.phase = Phase.ACTIVE;
-        if (active.timeout != null) active.timeout.cancel(false);
+        if (active.timeout != null)
+            active.timeout.cancel(false);
         notifyUi(() -> view.connected(active.peer));
     }
 
@@ -258,7 +283,8 @@ public final class CallCoordinator implements AutoCloseable {
     private void finish(String message) {
         Call previous = call;
         call = null;
-        if (previous != null && previous.timeout != null) previous.timeout.cancel(false);
+        if (previous != null && previous.timeout != null)
+            previous.timeout.cancel(false);
         try {
             voice.stopCall();
         } finally {
@@ -267,7 +293,8 @@ public final class CallCoordinator implements AutoCloseable {
     }
 
     private void fail(String message, Exception error) {
-        if (call != null) sendQuietly(call, ControlMessage.Type.CALL_END);
+        if (call != null)
+            sendQuietly(call, ControlMessage.Type.CALL_END);
         finish(message);
         notifyUi(() -> view.error(message + ": " + error.getMessage()));
     }
@@ -297,15 +324,18 @@ public final class CallCoordinator implements AutoCloseable {
 
     private void notifyUi(Runnable action) {
         ui.execute(() -> {
-            if (!closing.get()) action.run();
+            if (!closing.get())
+                action.run();
         });
     }
 
     private void submit(Runnable action) {
-        if (closing.get()) return;
+        if (closing.get())
+            return;
         try {
             loop.execute(() -> {
-                if (closing.get()) return;
+                if (closing.get())
+                    return;
                 try {
                     action.run();
                 } catch (RuntimeException e) {
@@ -321,7 +351,8 @@ public final class CallCoordinator implements AutoCloseable {
         if (closing.compareAndSet(false, true)) {
             loop.execute(() -> {
                 try {
-                    if (call != null) sendQuietly(call, ControlMessage.Type.CALL_END);
+                    if (call != null)
+                        sendQuietly(call, ControlMessage.Type.CALL_END);
                     finish("");
                 } finally {
                     network.disconnect();
@@ -331,6 +362,10 @@ public final class CallCoordinator implements AutoCloseable {
             });
         }
         return closed;
+    }
+
+    public void onChatMessage(Consumer<ControlMessage> handler) {
+        chatHandler = Objects.requireNonNull(handler);
     }
 
     @Override
