@@ -19,6 +19,7 @@ public final class InputComposer extends JPanel {
     private final UiUtils.RoundedTextField inputField = new UiUtils.RoundedTextField("Nhập tin nhắn...", UiUtils.ARC_XL);
     private final JButton btnEmoji = new JButton("\uD83D\uDE42"); // 🙂
     private final SendListener sendListener;
+    private JButton sendButton;
 
     public InputComposer(SendListener listener) {
         this.sendListener = listener;
@@ -32,7 +33,8 @@ public final class InputComposer extends JPanel {
 
         add(buildEmojiButton(), BorderLayout.WEST);
         add(buildInputField(),  BorderLayout.CENTER);
-        add(buildSendButton(),  BorderLayout.EAST);
+        sendButton = buildSendButton();
+        add(sendButton, BorderLayout.EAST);
     }
 
     // ── Emoji button ──────────────────────────────────────────────
@@ -139,13 +141,20 @@ public final class InputComposer extends JPanel {
     }
 
     private void handleSend() {
+        if (!inputField.isEnabled()) return;
         String text = inputField.getText().trim();
         if (text.isEmpty()) return;
+        inputField.setText("");
         if (sendListener != null) {
             sendListener.onSend(text);
         }
-        inputField.setText("");
         inputField.requestFocusInWindow();
+    }
+
+    public void setInputEnabled(boolean enabled) {
+        inputField.setEnabled(enabled);
+        btnEmoji.setEnabled(enabled);
+        sendButton.setEnabled(enabled);
     }
 
     private void insertAtCaret(String str) {

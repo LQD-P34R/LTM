@@ -1,7 +1,7 @@
 # Module 4: chat-core — Thanh vien 4 (CHAT)
 
 - `chat/ChatController.java`: dong goi lenh gui chat qua `NetworkGateway`.
-- `chat/ChatService.java`: xu ly nghiep vu tin nhan, goi `HistoryStore`, xu ly tin nhan nhan vao (TODO).
+- `chat/ChatService.java`: gửi/nhận chat 1-1 qua `NetworkGateway`, kiểm tra nội dung và ánh xạ hội thoại theo peer; có thể truyền `HistoryStore` khi triển khai lưu trữ. Phiên desktop hiện giữ lịch sử trong bộ nhớ giao diện.
 - `database/DatabaseManager.java`: ket noi SQLite (can them sqlite-jdbc khi trien khai).
 - `database/HistoryRepository.java`: luu/doc lich su chat (TODO).
 - Tuyet doi KHONG import Java Swing trong module chat.

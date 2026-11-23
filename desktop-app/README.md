@@ -4,7 +4,7 @@
 - `LoginFrame.java`: ten, IP, Port.
 - `ChatFrame.java`: khung chat, hien thi tin nhan, nut gui.
 - `CallPanel.java`: nut goi, mute, ket thuc va trang thai.
-- Ban dau dung mock data; khong viet Socket hay nghiep vu chat vao UI.
+- Giao diện dùng dữ liệu từ phiên kết nối thật; không viết Socket hay nghiệp vụ chat vào UI.
 
 **CA NHOM phu trach** phan khac trong module nay:
 - `src/main/java/com/voicechat/Main.java`: entry point.
@@ -15,3 +15,5 @@ Ly do: giu dung 4 Maven module, nen code tich hop/chung nam o module chay ung du
 nhung *khong duoc giao rieng cho TV3*.
 
 Build: `mvn -pl desktop-app -am package` tu thu muc goc.
+
+Chạy ứng dụng bằng `com.voicechat.Main` hoặc JAR đã đóng gói. Cấu hình Run/Debug mặc định trong NetBeans cũng dùng entry point này. Hướng dẫn kết nối hai máy nằm trong [README gốc](../README.md).

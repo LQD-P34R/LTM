@@ -10,7 +10,7 @@ import java.time.format.DateTimeFormatter;
 
 /**
  * VoiceLink ChatBubbleRenderer: Render bong bóng tin nhắn bo tròn 2 chiều mượt mà.
- * <p>Tin nhắn của mình: căn phải, màu chủ đạo C_PRIMARY, chữ trắng, dấu kiểm nhận ✓✓.<br>
+ * <p>Tin nhắn của mình: căn phải, màu chủ đạo C_PRIMARY, chữ trắng.<br>
  * Tin nhắn người khác: căn trái, thẻ trắng tinh C_CARD_BG có viền mảnh 1px C_BORDER, kèm avatar nhỏ.</p>
  */
 public final class ChatBubbleRenderer extends JPanel {
@@ -96,7 +96,7 @@ public final class ChatBubbleRenderer extends JPanel {
         footer.setOpaque(false);
 
         String timeStr = TIME_FMT.format(msg.sentAt());
-        JLabel timeLbl = new JLabel(isMine ? timeStr + "  \u2713\u2713" : timeStr);
+        JLabel timeLbl = new JLabel(timeStr);
         timeLbl.setFont(UiUtils.F_SMALL);
         timeLbl.setForeground(isMine ? new Color(255, 255, 255, 190) : UiUtils.C_TEXT_MUTED);
         footer.add(timeLbl);

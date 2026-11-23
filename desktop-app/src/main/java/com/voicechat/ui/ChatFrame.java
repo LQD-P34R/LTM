@@ -1,6 +1,7 @@
 package com.voicechat.ui;
 
 import com.voicechat.integration.CallCoordinator;
+import com.voicechat.integration.AppCoordinator;
 import com.voicechat.common.model.ChatMessage;
 import com.voicechat.common.model.PeerInfo;
 import com.voicechat.common.model.RoomInfo;
@@ -21,7 +22,7 @@ import java.util.List;
  * kèm thanh trạng thái thanh lịch ở đáy.
  * </p>
  */
-public final class ChatFrame extends JFrame implements SidebarPanel.SelectionListener, CallCoordinator.View {
+public final class ChatFrame extends JFrame implements SidebarPanel.SelectionListener, AppCoordinator.View {
 
     private static final String CARD_WELCOME = "WELCOME";
     private static final String CARD_HISTORY = "HISTORY";
@@ -40,17 +41,15 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
     private final String localUsername;
     private final String localUserId;
     private final List<ChatMessage> chatHistory = new ArrayList<>();
-    private final List<RoomInfo> demoRooms = new ArrayList<>();
+    private final List<RoomInfo> localRooms = new ArrayList<>();
     private PeerInfo currentCallPeer = null;
     private CallCoordinator calls;
+    private AppCoordinator app;
+    private final Set<String> onlinePeerIds = new HashSet<>();
     private IncomingCallDialog incomingDialog;
     private JLabel statusText;
 
     public ChatFrame(String localUsername) {
-        this(localUsername, true);
-    }
-
-    public ChatFrame(String localUsername, boolean demoMode) {
         super("VoiceLink P2P — " + localUsername);
         this.localUsername = localUsername;
         this.localUserId = localUsername;
@@ -70,13 +69,9 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
         root.add(buildStatusBar(), BorderLayout.SOUTH);
         setContentPane(root);
 
-        if (demoMode) {
-            loadDemoData();
-        } else {
-            sidebarPanel.setPeers(List.of());
-            sidebarPanel.setRooms(List.of());
-            statusText.setText("Đang khởi tạo kết nối...");
-        }
+        sidebarPanel.setPeers(List.of());
+        sidebarPanel.setRooms(List.of());
+        statusText.setText("Đang khởi tạo kết nối...");
     }
 
     private JPanel buildContentArea() {
@@ -185,15 +180,22 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
     @Override
     public void onPeerSelected(PeerInfo peer) {
         String cardKey = "dm_" + peer.id();
+        ensureDirectChat(peer);
+        cardLayout.show(contentPanel, cardKey);
+    }
+
+    private DirectChatPanel ensureDirectChat(PeerInfo peer) {
+        String cardKey = "dm_" + peer.id();
         if (!directChats.containsKey(peer.id())) {
             DirectChatPanel panel = new DirectChatPanel(peer, localUserId, buildDmCallback());
             panel.loadHistory(chatHistory.stream()
                     .filter(msg -> cardKey.equals(msg.roomId()))
                     .toList());
             directChats.put(peer.id(), panel);
+            panel.setConnected(onlinePeerIds.contains(peer.id()));
             contentPanel.add(panel, cardKey);
         }
-        cardLayout.show(contentPanel, cardKey);
+        return directChats.get(peer.id());
     }
 
     @Override
@@ -260,8 +262,8 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
                         "room_" + System.currentTimeMillis(),
                         roomName,
                         localUserId);
-                demoRooms.add(newRoom);
-                sidebarPanel.setRooms(new ArrayList<>(demoRooms));
+                localRooms.add(newRoom);
+                sidebarPanel.setRooms(new ArrayList<>(localRooms));
                 dialog.dispose();
                 onRoomSelected(newRoom);
             }
@@ -282,17 +284,12 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
         return new DirectChatPanel.ActionCallback() {
             @Override
             public void onSendMessage(PeerInfo peer, String text) {
-                ChatMessage msg = new ChatMessage(
-                        UUID.randomUUID().toString(),
-                        "dm_" + peer.id(),
-                        localUserId,
-                        text,
-                        Instant.now());
-                chatHistory.add(msg);
-                DirectChatPanel panel = directChats.get(peer.id());
-                if (panel != null) {
-                    SwingUtilities.invokeLater(() -> panel.appendMessage(msg));
+                if (app == null) {
+                    onMessageSendFailed(peer.id(), text, "Chưa kết nối dịch vụ chat.");
+                    return;
                 }
+                directChats.get(peer.id()).setSending(true);
+                app.sendText(peer.id(), text);
             }
 
             @Override
@@ -348,29 +345,50 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
         };
     }
 
-    // ── Public API (dùng cho tích hợp mạng sau này) ──────────────
+    // All message callbacks are dispatched on the Swing EDT by AppCoordinator.
+    @Override
     public void onMessageReceived(ChatMessage msg) {
-        chatHistory.add(msg);
         String roomId = msg.roomId();
         if (roomId.startsWith("dm_")) {
             String peerId = roomId.substring(3);
-            DirectChatPanel panel = directChats.get(peerId);
-            if (panel != null)
-                panel.appendMessage(msg);
+            boolean firstChat = directChats.isEmpty();
+            DirectChatPanel panel = ensureDirectChat(new PeerInfo(peerId, peerId, "", 0, 0));
+            chatHistory.add(msg);
+            panel.appendMessage(msg);
+            if (firstChat && currentCallPeer == null) cardLayout.show(contentPanel, roomId);
+            if (!localUserId.equals(msg.senderId())) {
+                statusText.setText("Tin nhắn mới từ " + msg.senderId());
+            }
         } else {
+            chatHistory.add(msg);
             GroupChatPanel panel = groupChats.get(roomId);
             if (panel != null)
                 panel.appendMessage(msg);
         }
     }
 
+    @Override
+    public void onMessageSent(ChatMessage msg) {
+        DirectChatPanel panel = directChats.get(msg.roomId().substring(3));
+        if (panel != null) panel.setSending(false);
+        onMessageReceived(msg);
+    }
+
+    @Override
+    public void onMessageSendFailed(String peerId, String text, String reason) {
+        DirectChatPanel panel = directChats.get(peerId);
+        if (panel != null) panel.restoreFailedMessage(text);
+        JOptionPane.showMessageDialog(this, "Không thể gửi tin nhắn: " + reason,
+                "Tin nhắn", JOptionPane.ERROR_MESSAGE);
+    }
+
     public void setPeers(List<PeerInfo> peers) {
         Runnable update = () -> {
             sidebarPanel.setPeers(peers);
-            Set<String> online = new HashSet<>();
+            onlinePeerIds.clear();
             for (PeerInfo peer : peers)
-                online.add(peer.id());
-            directChats.forEach((id, panel) -> panel.setConnected(online.contains(id)));
+                onlinePeerIds.add(peer.id());
+            directChats.forEach((id, panel) -> panel.setConnected(onlinePeerIds.contains(id)));
             statusText.setText("Đang kết nối với " + peers.size() + " peer.");
         };
         if (SwingUtilities.isEventDispatchThread())
@@ -416,6 +434,11 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
 
     public void bindCalls(CallCoordinator calls) {
         this.calls = Objects.requireNonNull(calls);
+    }
+
+    public void bindApp(AppCoordinator app) {
+        this.app = Objects.requireNonNull(app);
+        bindCalls(app.calls());
     }
 
     @Override
@@ -479,15 +502,4 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
         }
     }
 
-    private void loadDemoData() {
-        List<PeerInfo> peers = List.of(
-                new PeerInfo("peer_B", "User_B", "192.168.1.2", 5000, 5001),
-                new PeerInfo("peer_C", "User_C", "192.168.1.3", 5000, 5001),
-                new PeerInfo("peer_D", "User_D", "192.168.1.4", 5000, 5001));
-        demoRooms.addAll(List.of(
-                new RoomInfo("room_1", "Nhóm học nhóm", localUserId),
-                new RoomInfo("room_2", "Project Alpha", localUserId)));
-        sidebarPanel.setPeers(peers);
-        sidebarPanel.setRooms(new ArrayList<>(demoRooms));
-    }
 }

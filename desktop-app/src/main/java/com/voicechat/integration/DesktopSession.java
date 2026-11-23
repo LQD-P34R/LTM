@@ -13,7 +13,7 @@ import javax.swing.SwingUtilities;
 /** Khoi tao mot phien desktop tu LoginFrame; duoc goi tren EDT. */
 public final class DesktopSession implements AutoCloseable {
     private final PeerManager network;
-    private final CallCoordinator calls;
+    private final AppCoordinator app;
     private final ChatFrame frame;
     private boolean closed;
 
@@ -24,9 +24,9 @@ public final class DesktopSession implements AutoCloseable {
         }
         network = new PeerManager(username);
         VoiceService voice = new VoiceService(network);
-        frame = new ChatFrame(username, false);
-        calls = new CallCoordinator(network, voice, username, frame);
-        frame.bindCalls(calls);
+        frame = new ChatFrame(username);
+        app = new AppCoordinator(network, voice, username, frame);
+        frame.bindApp(app);
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         frame.addWindowListener(new WindowAdapter() {
             @Override public void windowClosing(WindowEvent event) {
@@ -43,7 +43,7 @@ public final class DesktopSession implements AutoCloseable {
         Objects.requireNonNull(onFailure);
         if (closed) throw new IllegalStateException("Phiên đã đóng");
 
-        calls.open(() -> {
+        app.calls().open(() -> {
             network.startListening(localTcpPort, localUdpPort);
             System.out.printf("LISTEN %s TCP=%d UDP=%d%n",
                     network.localPeerId(), localTcpPort, localUdpPort);
@@ -64,7 +64,7 @@ public final class DesktopSession implements AutoCloseable {
         if (closed) return;
         closed = true;
         frame.dispose();
-        calls.close();
+        app.close();
     }
 
     private static void requireEdt() {

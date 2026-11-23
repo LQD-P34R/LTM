@@ -85,7 +85,7 @@ public final class CallCoordinator implements AutoCloseable {
         if (localId.isBlank() || ringTimeout.isZero() || ringTimeout.isNegative()) {
             throw new IllegalArgumentException("ID hoac timeout khong hop le");
         }
-        network.onControlMessage(message -> submit(() -> receive(message)));
+        network.onControlMessage(this::receiveControlMessage);
         network.onPeerConnected(id -> submit(this::refreshPeers));
         network.onPeerDisconnected(id -> submit(() -> {
             if (call != null && call.peer.id().equals(id)) {
@@ -186,13 +186,18 @@ public final class CallCoordinator implements AutoCloseable {
         });
     }
 
+    /** Entry point for AppCoordinator's shared TCP message router. */
+    public void receiveControlMessage(ControlMessage message) {
+        submit(() -> receive(message));
+    }
+
     private void receive(ControlMessage message) {
         if (message == null || message.type() == null
                 || !localId.equals(message.targetId())
                 || !network.connectedPeerIds().contains(message.senderId())) return;
         switch (message.type()) {
             case CALL_REQUEST, CALL_ACCEPT, CALL_REJECT, CALL_END -> { }
-            default -> { return; } // AppCoordinator se route CHAT/ROOM tai day.
+            default -> { return; }
         }
         try {
             UUID.fromString(message.payload());

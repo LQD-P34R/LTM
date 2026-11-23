@@ -10,12 +10,14 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import javax.swing.SwingUtilities;
+import org.junit.Test;
 
 /** Test dieu khien goi qua TCP localhost that, voice gia lap; khong mo mic/loa. */
-public final class CallCoordinatorDemo {
+public final class CallCoordinatorTest {
     private static final PeerInfo B = new PeerInfo("B", "B", "127.0.0.1", 0, 0);
 
-    public static void main(String[] args) throws Exception {
+    @Test(timeout = 15000)
+    public void handlesCallLifecycleAndFailures() throws Exception {
         try (Fixture f = new Fixture(Duration.ofSeconds(3))) {
             f.a.requestCall(B);
             await(() -> f.bView.phase.equals("INCOMING"), "incoming request");
@@ -85,9 +87,6 @@ public final class CallCoordinatorDemo {
             await(() -> f.bView.phase.equals("IDLE"), "window close ends remote call");
             require(f.aNet.connectedPeerIds().isEmpty(), "Window close releases network");
         }
-        System.out.println("PASS: request/accept, EDT, mute/unmute, end, reject,");
-        System.out.println("      cancel, stale ACCEPT, device failure, restart,");
-        System.out.println("      disconnect, ring timeout and window cleanup.");
     }
 
     private static final class Fixture implements AutoCloseable {

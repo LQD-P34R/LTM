@@ -2,10 +2,12 @@ package com.voicechat.audio;
 
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
+import org.junit.Test;
 
 /** Kiem tra bang dong ho gia lap; khong mo mic, loa hoac ket noi mang. */
-public final class JitterBufferDemo {
-    public static void main(String[] args) {
+public final class JitterBufferTest {
+    @Test
+    public void handlesPacketFormatAndPlaybackTiming() {
         byte[] pcm = frame(7);
         byte[] encoded = VoicePacket.encode(42, pcm);
         VoicePacket decoded = VoicePacket.decode(encoded);
@@ -57,9 +59,6 @@ public final class JitterBufferDemo {
         requireFrame(single.poll(ms(60)), 10, "Do not wait forever for 3 packets");
         requireFrame(single.poll(ms(80)), 0, "Continue silence during outage");
 
-        System.out.println("PASS: packet format, malformed packets, prefill,");
-        System.out.println("      reordering, loss, duplicates, late packets,");
-        System.out.println("      scheduler stalls, resync and single-packet startup.");
     }
 
     private static long ms(long value) {

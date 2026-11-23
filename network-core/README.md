@@ -45,18 +45,12 @@ luong mang, nen chuyen cong viec cham sang luong cua module tich hop.
    và chọn JDK 21 ở Maven > Runner > JRE.
 2. Mở cửa sổ Maven, chọn Reload All Maven Projects để nạp Jackson Core.
    Chọn Execute Maven Goal và nhập `-pl network-core -am compile`.
-3. Tạo hai cấu hình Application trong Run > Edit Configurations. Cả hai
-   dùng class `com.voicechat.network.PeerDemo`, classpath của
-   `network-core` và JRE 21.
-4. Chạy B với Program arguments `B 5100 6100`. Chờ
-   `LISTEN B TCP=5100 UDP=6100`.
-5. Trong vòng 60 giây, chạy A với Program arguments
-   `A 5101 6101 127.0.0.1 5100`. A in `HELLO OK`. B in hai dòng
-   `CHAT A` có dấu và `UDP A: [1, 2, 3]`. A in phản hồi `CHAT B`
-   và `UDP B: [1, 2, 3]`. Hai cửa sổ in `PASS CHAT/UDP` và
-   `PASS REBIND` kèm ID tương ứng.
-6. Khi chạy trên hai máy cùng LAN, dùng IP LAN của B thay cho
-   `127.0.0.1`. Cho phép lưu lượng TCP/UDP đến các cổng demo trên
-   firewall của hai máy.
+3. Để chạy ứng dụng, tạo cấu hình Application dùng class `com.voicechat.Main`,
+   classpath của `desktop-app` và JRE 21. Cho phép chạy nhiều phiên nếu thử
+   hai người dùng trên cùng máy.
+4. Nhập tên, địa chỉ IP và cổng trên màn hình đăng nhập theo bảng cấu hình
+   trong [README gốc](../README.md). Khi chạy trên hai máy cùng LAN, dùng IP
+   LAN của máy chờ và cho phép các cổng TCP/UDP tương ứng qua firewall.
 
-Các demo TCP cũ vẫn minh họa riêng `writeUTF/readUTF`.
+Chạy `mvn verify` từ thư mục gốc để kiểm tra chat và điều phối cuộc gọi qua
+kết nối TCP thật; phần âm thanh trong kiểm thử được giả lập.

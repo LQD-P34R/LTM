@@ -31,6 +31,8 @@ public final class DirectChatPanel extends JPanel {
     private JLabel statusLbl;
     private JButton callBtn;
     private final InputComposer composer;
+    private boolean connected = true;
+    private boolean sending;
 
     public DirectChatPanel(PeerInfo peer, String localUserId, ActionCallback callback) {
         this.localUserId = localUserId;
@@ -59,7 +61,7 @@ public final class DirectChatPanel extends JPanel {
         JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
         left.setOpaque(false);
 
-        boolean isOnline = true; // Danh ba cua VoiceUiDemo chi gom peer da ket noi.
+        boolean isOnline = true; // Danh bạ chỉ gồm peer đang kết nối.
         avatar = new UiUtils.AvatarBadge(peer.username(), 42, false, isOnline, true);
         left.add(avatar);
 
@@ -94,10 +96,23 @@ public final class DirectChatPanel extends JPanel {
 
     // ── Message area ──────────────────────────────────────────────
     public void setConnected(boolean online) {
+        connected = online;
         avatar.setOnline(online);
         statusLbl.setText(online ? "● Đang hoạt động" : "○ Ngoại tuyến");
         statusLbl.setForeground(online ? UiUtils.C_ONLINE : UiUtils.C_TEXT_MUTED);
         callBtn.setEnabled(online);
+        composer.setInputEnabled(connected && !sending);
+    }
+
+    public void setSending(boolean sending) {
+        this.sending = sending;
+        composer.setInputEnabled(connected && !sending);
+    }
+
+    public void restoreFailedMessage(String text) {
+        setSending(false);
+        composer.setText(text);
+        if (connected) composer.requestInputFocus();
     }
 
     private JScrollPane buildMessageArea() {
