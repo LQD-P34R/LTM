@@ -3,6 +3,7 @@ package com.voicechat.ui;
 import com.voicechat.common.model.ChatMessage;
 import com.voicechat.common.model.PeerInfo;
 import com.voicechat.common.model.RoomInfo;
+import com.voicechat.integration.GroupChatCoordinator;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -12,8 +13,11 @@ import java.util.List;
 
 /**
  * VoiceLink GroupChatPanel: Khung trò chuyện nhóm phong cách VoiceLink.
- * <p>Bố cục: Header phẳng hiện đại với avatar nhóm và nút gọi/thành viên bo tròn,
- * vùng cuộn tin nhắn ở giữa, danh sách thành viên ở bên phải và InputComposer ở đáy.</p>
+ * <p>
+ * Bố cục: Header phẳng hiện đại với avatar nhóm và nút gọi/thành viên bo tròn,
+ * vùng cuộn tin nhắn ở giữa, danh sách thành viên ở bên phải và InputComposer ở
+ * đáy.
+ * </p>
  */
 public final class GroupChatPanel extends JPanel {
 
@@ -21,43 +25,50 @@ public final class GroupChatPanel extends JPanel {
         void onSendMessage(RoomInfo room, String text);
     }
 
-    private final String        localUserId;
-    private final JPanel        messageContainer = new MessageList();
-    private final JPanel        memberListPanel  = new JPanel();
-    private JScrollPane         scrollPane;
-    private JLabel              memberCountLbl;
+    private final String localUserId;
+    private final JPanel messageContainer = new MessageList();
+    private final JPanel memberListPanel = new JPanel();
+    private JScrollPane scrollPane;
+    private JLabel memberCountLbl;
     private final InputComposer composer;
     private final UiUtils.RoundedButton membership = new UiUtils.RoundedButton(
             "Tham gia", UiUtils.C_PRIMARY_LIGHT, UiUtils.C_PRIMARY, UiUtils.ARC_SM);
-    private java.util.Map<String,String> names = java.util.Map.of();
+    private java.util.Map<String, String> names = java.util.Map.of();
     private boolean joined;
+
     public void bindMembership(java.util.function.Consumer<Boolean> change) {
         membership.setVisible(true);
         membership.addActionListener(e -> change.accept(!joined));
         showMembership(false);
     }
+
     public void showMembership(boolean value) {
         joined = value;
         membership.setText(value ? "Rời phòng" : "Tham gia");
         composer.setVisible(value);
     }
-    public void setDisplayNames(java.util.Map<String,String> names) { this.names = names; }
-    public void restoreDraft(String text) {
-        if (composer.getText().isEmpty()) composer.setText(text);
+
+    public void setDisplayNames(java.util.Map<String, String> names) {
+        this.names = names;
     }
 
+    public void restoreDraft(String text) {
+        if (composer.getText().isEmpty())
+            composer.setText(text);
+    }
 
     public GroupChatPanel(RoomInfo room, String localUserId, ActionCallback callback) {
         this.localUserId = localUserId;
         setLayout(new BorderLayout());
         setBackground(UiUtils.C_APP_BG);
 
-        add(buildHeader(room),    BorderLayout.NORTH);
-        add(buildMessageArea(),   BorderLayout.CENTER);
-        add(buildMemberPanel(),   BorderLayout.EAST);
+        add(buildHeader(room), BorderLayout.NORTH);
+        add(buildMessageArea(), BorderLayout.CENTER);
+        add(buildMemberPanel(), BorderLayout.EAST);
 
         composer = new InputComposer(text -> {
-            if (callback != null) callback.onSendMessage(room, text);
+            if (callback != null)
+                callback.onSendMessage(room, text);
         });
         add(composer, BorderLayout.SOUTH);
     }
@@ -68,8 +79,7 @@ public final class GroupChatPanel extends JPanel {
         header.setBackground(UiUtils.C_CARD_BG);
         header.setBorder(BorderFactory.createCompoundBorder(
                 new MatteBorder(0, 0, 1, 0, UiUtils.C_BORDER),
-                new EmptyBorder(12, 20, 12, 20)
-        ));
+                new EmptyBorder(12, 20, 12, 20)));
 
         // Trái: Avatar nhóm + Tên + Số thành viên
         JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
@@ -101,13 +111,13 @@ public final class GroupChatPanel extends JPanel {
         UiUtils.RoundedButton callGroupBtn = new UiUtils.RoundedButton(
                 "Gọi cả nhóm", UiUtils.C_PRIMARY, Color.WHITE, UiUtils.ARC_MD);
         callGroupBtn.setIcon(UiIcon.PHONE);
-        callGroupBtn.setBorder(BorderFactory.createEmptyBorder(6,8,6,8));
+        callGroupBtn.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
         callGroupBtn.setPreferredSize(new Dimension(130, 36));
 
         UiUtils.RoundedButton membersBtn = new UiUtils.RoundedButton(
                 "Thành viên", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY, UiUtils.ARC_MD);
         membersBtn.setIcon(UiIcon.GROUP);
-        membersBtn.setBorder(BorderFactory.createEmptyBorder(6,8,6,8));
+        membersBtn.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
         membersBtn.setPreferredSize(new Dimension(116, 36));
 
         membersBtn.addActionListener(e -> {
@@ -196,7 +206,8 @@ public final class GroupChatPanel extends JPanel {
     }
 
     public void appendMessage(ChatMessage msg) {
-        ChatBubbleRenderer bubble = new ChatBubbleRenderer(msg, localUserId, names.getOrDefault(msg.senderId(),msg.senderId()));
+        ChatBubbleRenderer bubble = new ChatBubbleRenderer(msg, localUserId,
+                names.getOrDefault(msg.senderId(), msg.senderId()));
         bubble.setAlignmentX(Component.LEFT_ALIGNMENT);
         messageContainer.add(bubble);
         messageContainer.revalidate();
@@ -206,7 +217,8 @@ public final class GroupChatPanel extends JPanel {
     public void loadHistory(List<ChatMessage> history) {
         messageContainer.removeAll();
         for (ChatMessage msg : history) {
-            ChatBubbleRenderer bubble = new ChatBubbleRenderer(msg, localUserId, names.getOrDefault(msg.senderId(),msg.senderId()));
+            ChatBubbleRenderer bubble = new ChatBubbleRenderer(msg, localUserId,
+                    names.getOrDefault(msg.senderId(), msg.senderId()));
             bubble.setAlignmentX(Component.LEFT_ALIGNMENT);
             messageContainer.add(bubble);
         }

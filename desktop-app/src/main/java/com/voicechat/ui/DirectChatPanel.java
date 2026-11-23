@@ -134,6 +134,12 @@ public final class DirectChatPanel extends JPanel {
         scrollToBottom();
     }
 
+    public void restoreDraft(String text) {
+        if (composer.getText().isEmpty()) {
+            composer.setText(text);
+        }
+    }
+
     public void clearMessages() {
         messageContainer.removeAll();
         messageContainer.revalidate();

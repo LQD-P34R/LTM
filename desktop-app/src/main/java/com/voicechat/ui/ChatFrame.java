@@ -1,298 +1,187 @@
 package com.voicechat.ui;
 
-import com.voicechat.integration.CallCoordinator;
 import com.voicechat.common.model.ChatMessage;
 import com.voicechat.common.model.PeerInfo;
 import com.voicechat.common.model.RoomInfo;
-
-import javax.swing.*;
-import javax.swing.border.EmptyBorder;
-import javax.swing.border.MatteBorder;
+import com.voicechat.group.GroupClient;
+import com.voicechat.group.GroupProtocol.View;
+import com.voicechat.integration.CallCoordinator;
+import com.voicechat.integration.GroupChatCoordinator;
+import com.voicechat.integration.DirectChatCoordinator;
 import java.awt.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+import javax.swing.*;
 
-/**
- * VoiceLink ChatFrame: Cửa sổ làm việc chính của ứng dụng.
- * <p>
- * Bố cục 2 cột hiện đại: Sidebar bên trái rộng 260px nền trắng,
- * vùng nội dung bên phải (CardLayout) trên nền Slate dịu mắt,
- * kèm thanh trạng thái thanh lịch ở đáy.
- * </p>
- */
-public final class ChatFrame extends JFrame implements SidebarPanel.SelectionListener, CallCoordinator.View {
+/** Cửa sổ chính: ghép các thành phần giao diện với coordinator. */
+public final class ChatFrame extends JFrame implements
+        SidebarPanel.SelectionListener,
+        CallCoordinator.View,
+        GroupChatCoordinator.Listener,
+        DirectChatCoordinator.Listener {
 
-    private static final String CARD_WELCOME = "WELCOME";
-    private static final String CARD_HISTORY = "HISTORY";
-    private static final String CARD_CALL = "CALL";
-
-    private final CardLayout cardLayout = new CardLayout();
-    private final JPanel contentPanel = new JPanel(cardLayout);
-
-    private final SidebarPanel sidebarPanel;
-    private final HistoryPanel historyPanel = new HistoryPanel();
-    private final CallPanel callPanel;
-
-    private final Map<String, DirectChatPanel> directChats = new LinkedHashMap<>();
-    private final Map<String, GroupChatPanel> groupChats = new LinkedHashMap<>();
-
-    private final String localUsername;
+    private final SidebarPanel sidebar;
+    private final ChatContentPanel content;
+    private final ChatStatusBar status;
     private final String localUserId;
-    private final List<ChatMessage> chatHistory = new ArrayList<>();
+    private final GroupChatCoordinator groups;
     private final List<RoomInfo> demoRooms = new ArrayList<>();
-    private PeerInfo currentCallPeer = null;
-    private CallCoordinator calls;
-    private IncomingCallDialog incomingDialog;
-    private JLabel statusText;
 
-    public ChatFrame(String localUsername) {
-        this(localUsername, true);
+    private List<RoomInfo> knownRooms = List.of();
+    private CallCoordinator calls;
+    private DirectChatCoordinator direct;
+    private PeerInfo currentCallPeer;
+    private IncomingCallDialog incomingDialog;
+
+    public ChatFrame(String username) {
+        this(username, true, null, null);
     }
 
-    public ChatFrame(String localUsername, boolean demoMode) {
-        super("VoiceLink P2P — " + localUsername);
-        this.localUsername = localUsername;
-        this.localUserId = localUsername;
+    public ChatFrame(String username, boolean demoMode) {
+        this(username, demoMode, null, null);
+    }
+
+    public ChatFrame(String username, GroupClient client, View initial) {
+        this(username, false, client, initial);
+    }
+
+    private ChatFrame(String username, boolean demoMode, GroupClient client, View initial) {
+        super("VoiceLink P2P — " + username);
+        localUserId = client == null ? username : client.localId();
+        groups = client == null ? null : new GroupChatCoordinator(client, this);
+        sidebar = new SidebarPanel(this);
+        content = new ChatContentPanel(username, localUserId, groups != null,
+                buildCallListener(), () -> groups.olderPage(), () -> groups.newerPage());
+        status = new ChatStatusBar(username, content::showCall);
 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1020, 700);
         setMinimumSize(new Dimension(800, 520));
         setLocationRelativeTo(null);
 
-        callPanel = new CallPanel(buildCallListener());
-        sidebarPanel = new SidebarPanel(this);
-
         JPanel root = new JPanel(new BorderLayout());
         root.setBackground(UiUtils.C_APP_BG);
-        root.add(sidebarPanel, BorderLayout.WEST);
-        root.add(buildContentArea(), BorderLayout.CENTER);
-        root.add(buildStatusBar(), BorderLayout.SOUTH);
+        root.add(sidebar, BorderLayout.WEST);
+        root.add(content, BorderLayout.CENTER);
+        root.add(status, BorderLayout.SOUTH);
         setContentPane(root);
 
-        if (demoMode) {
+        if (groups != null) {
+            sidebar.setPeers(List.of());
+            onView(initial, 0);
+            setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+            addWindowListener(new WindowAdapter() {
+                @Override
+                public void windowClosed(WindowEvent event) {
+                    groups.close();
+                }
+            });
+            groups.start();
+        } else if (demoMode) {
             loadDemoData();
         } else {
-            sidebarPanel.setPeers(List.of());
-            sidebarPanel.setRooms(List.of());
-            statusText.setText("Đang khởi tạo kết nối...");
+            sidebar.setPeers(List.of());
+            sidebar.setRooms(List.of());
+            status.setStatus("Đang khởi tạo kết nối...");
         }
     }
 
-    private JPanel buildContentArea() {
-        contentPanel.setBackground(UiUtils.C_APP_BG);
-        contentPanel.add(buildWelcomePanel(), CARD_WELCOME);
-        contentPanel.add(historyPanel, CARD_HISTORY);
-        contentPanel.add(callPanel, CARD_CALL);
-        cardLayout.show(contentPanel, CARD_WELCOME);
-        return contentPanel;
-    }
-
-    private JPanel buildWelcomePanel() {
-        JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBackground(UiUtils.C_APP_BG);
-
-        UiUtils.RoundedPanel card = new UiUtils.RoundedPanel(
-                UiUtils.ARC_LG, UiUtils.C_CARD_BG, UiUtils.C_BORDER, true);
-        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
-        card.setBorder(new EmptyBorder(40, 50, 40, 50));
-        card.setPreferredSize(new Dimension(460, 320));
-
-        // Logo tròn
-        JPanel iconPanel = new JPanel() {
-            @Override
-            protected void paintComponent(Graphics g) {
-                super.paintComponent(g);
-                Graphics2D g2 = (Graphics2D) g.create();
-                UiUtils.enableAntiAliasing(g2);
-                g2.setColor(UiUtils.C_PRIMARY_LIGHT);
-                g2.fillOval((getWidth() - 64) / 2, 0, 64, 64);
-                g2.dispose();
-            }
-        };
-        iconPanel.setLayout(new GridBagLayout());
-        iconPanel.setOpaque(false);
-        iconPanel.setPreferredSize(new Dimension(460, 66));
-        iconPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        JLabel iconLbl = new JLabel("\uD83D\uDCAC"); // 💬
-        iconLbl.setFont(new Font("Segoe UI", Font.PLAIN, 32));
-        iconLbl.setForeground(UiUtils.C_PRIMARY);
-        iconPanel.add(iconLbl);
-        card.add(iconPanel);
-        card.add(Box.createVerticalStrut(16));
-
-        JLabel welcomeLbl = new JLabel("Chào mừng, " + localUsername + "!", SwingConstants.CENTER);
-        welcomeLbl.setFont(UiUtils.F_TITLE_LG);
-        welcomeLbl.setForeground(UiUtils.C_TEXT_PRIMARY);
-        welcomeLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
-        card.add(welcomeLbl);
-        card.add(Box.createVerticalStrut(8));
-
-        JLabel hintLbl = new JLabel(
-                "Chọn một liên hệ từ danh sách bên trái để bắt đầu nhắn tin hoặc gọi thoại.",
-                SwingConstants.CENTER);
-        hintLbl.setFont(UiUtils.F_BODY);
-        hintLbl.setForeground(UiUtils.C_TEXT_MUTED);
-        hintLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
-        card.add(hintLbl);
-
-        panel.add(card);
-        return panel;
-    }
-
-    private JPanel buildStatusBar() {
-        JPanel bar = new JPanel(new BorderLayout());
-        bar.setBackground(UiUtils.C_CARD_BG);
-        bar.setBorder(BorderFactory.createCompoundBorder(
-                new MatteBorder(1, 0, 0, 0, UiUtils.C_BORDER),
-                new EmptyBorder(6, 16, 6, 16)));
-
-        JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        left.setOpaque(false);
-
-        JLabel dot = new JLabel("●");
-        dot.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        dot.setForeground(UiUtils.C_ONLINE);
-
-        statusText = new JLabel(localUsername + "  •  Sẵn sàng kết nối P2P");
-        statusText.setFont(UiUtils.F_SMALL);
-        statusText.setForeground(UiUtils.C_TEXT_MUTED);
-
-        left.add(dot);
-        left.add(statusText);
-
-        UiUtils.RoundedButton callViewBtn = new UiUtils.RoundedButton(
-                "Cuộc gọi",
-                UiUtils.C_PRIMARY_LIGHT,
-                UiUtils.C_PRIMARY,
-                UiUtils.ARC_SM);
-
-        callViewBtn.addActionListener(e -> cardLayout.show(contentPanel, CARD_CALL));
-
-        left.add(callViewBtn);
-        bar.add(left, BorderLayout.WEST);
-
-        JLabel ver = new JLabel("VoiceLink P2P v1.0");
-        ver.setFont(UiUtils.F_SMALL);
-        ver.setForeground(UiUtils.C_TEXT_HINT);
-        bar.add(ver, BorderLayout.EAST);
-
-        return bar;
-    }
-
-    // ── SidebarPanel.SelectionListener ───────────────────────────
     @Override
     public void onPeerSelected(PeerInfo peer) {
-        String cardKey = "dm_" + peer.id();
-        if (!directChats.containsKey(peer.id())) {
-            DirectChatPanel panel = new DirectChatPanel(peer, localUserId, buildDmCallback());
-            panel.loadHistory(chatHistory.stream()
-                    .filter(msg -> cardKey.equals(msg.roomId()))
-                    .toList());
-            directChats.put(peer.id(), panel);
-            contentPanel.add(panel, cardKey);
+        if (groups != null) {
+            groups.showDirectChat();
         }
-        cardLayout.show(contentPanel, cardKey);
+        content.showPeer(peer, buildDmCallback());
+        if (direct != null) {
+            direct.loadHistory(peer.id());
+        }
     }
 
     @Override
     public void onRoomSelected(RoomInfo room) {
-        String cardKey = "room_" + room.id();
-        if (!groupChats.containsKey(room.id())) {
-            GroupChatPanel panel = new GroupChatPanel(room, localUserId, buildGroupCallback());
-            panel.loadHistory(chatHistory.stream()
-                    .filter(msg -> room.id().equals(msg.roomId()))
-                    .toList());
-            groupChats.put(room.id(), panel);
-            contentPanel.add(panel, cardKey);
+        sidebar.selectRoom(room);
+        content.showRoom(room, buildGroupCallback(),
+                groups == null ? null : groups::changeMembership);
+        if (groups != null) {
+            groups.selectRoom(room);
         }
-        cardLayout.show(contentPanel, cardKey);
     }
 
     @Override
     public void onHistoryRequested() {
-        historyPanel.loadHistory(chatHistory);
-        cardLayout.show(contentPanel, CARD_HISTORY);
+        content.showHistory(groups != null);
+        if (groups != null) {
+            groups.showHistory();
+        }
     }
 
     @Override
     public void onCreateGroupRequested() {
-        // Modal dialog tạo nhóm bo góc hiện đại
-        JDialog dialog = new JDialog(this, "Tạo nhóm mới", true);
-        dialog.setUndecorated(true);
-        dialog.setBackground(new Color(0, 0, 0, 0));
-        dialog.setSize(380, 220);
-        dialog.setLocationRelativeTo(this);
-
-        UiUtils.RoundedPanel card = new UiUtils.RoundedPanel(
-                UiUtils.ARC_LG, UiUtils.C_CARD_BG, UiUtils.C_BORDER, true);
-        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
-        card.setBorder(new EmptyBorder(24, 28, 20, 28));
-
-        JLabel titleLbl = new JLabel("Tạo nhóm trò chuyện mới");
-        titleLbl.setFont(UiUtils.F_HEADING);
-        titleLbl.setForeground(UiUtils.C_TEXT_PRIMARY);
-        titleLbl.setAlignmentX(Component.LEFT_ALIGNMENT);
-        card.add(titleLbl);
-        card.add(Box.createVerticalStrut(14));
-
-        UiUtils.RoundedTextField nameField = new UiUtils.RoundedTextField("Nhập tên nhóm...");
-        nameField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
-        nameField.setAlignmentX(Component.LEFT_ALIGNMENT);
-        card.add(nameField);
-        card.add(Box.createVerticalStrut(20));
-
-        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        btnRow.setOpaque(false);
-        btnRow.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        UiUtils.RoundedButton cancelBtn = new UiUtils.RoundedButton(
-                "Huỷ", UiUtils.C_SIDEBAR_LIGHT, UiUtils.C_TEXT_PRIMARY, UiUtils.ARC_SM);
-        cancelBtn.addActionListener(e -> dialog.dispose());
-
-        UiUtils.RoundedButton okBtn = new UiUtils.RoundedButton(
-                "Tạo nhóm", UiUtils.C_PRIMARY, Color.WHITE, UiUtils.ARC_SM);
-        okBtn.addActionListener(e -> {
-            String roomName = nameField.getText().trim();
-            if (!roomName.isEmpty()) {
-                RoomInfo newRoom = new RoomInfo(
-                        "room_" + System.currentTimeMillis(),
-                        roomName,
-                        localUserId);
-                demoRooms.add(newRoom);
-                sidebarPanel.setRooms(new ArrayList<>(demoRooms));
-                dialog.dispose();
-                onRoomSelected(newRoom);
-            }
-        });
-
-        nameField.addActionListener(e -> okBtn.doClick());
-
-        btnRow.add(cancelBtn);
-        btnRow.add(okBtn);
-        card.add(btnRow);
-
-        dialog.setContentPane(card);
-        dialog.setVisible(true);
+        String name = CreateGroupDialog.showDialog(this);
+        if (name == null) {
+            return;
+        }
+        if (groups != null) {
+            groups.createRoom(name);
+            return;
+        }
+        RoomInfo room = new RoomInfo(
+                "room_" + System.currentTimeMillis(), name, localUserId);
+        demoRooms.add(room);
+        sidebar.setRooms(new ArrayList<>(demoRooms));
+        onRoomSelected(room);
     }
 
-    // ── Callbacks ─────────────────────────────────────────────────
+    @Override
+    public void onView(View data, int page) {
+        setTitle("VoiceLink P2P — " + data.username());
+        status.setStatus(data.username() + " • Đã kết nối máy chủ nhóm");
+        if (!knownRooms.equals(data.rooms())) {
+            knownRooms = data.rooms();
+            sidebar.setRooms(knownRooms);
+        }
+        content.renderGroupView(data, page);
+    }
+
+    @Override
+    public void onRoomCreated(RoomInfo room) {
+        onRoomSelected(room);
+    }
+
+    @Override
+    public void onSendFailed(String roomId, String text) {
+        content.restoreDraft(roomId, text);
+    }
+
+    @Override
+    public void onError(String message, boolean showDialog) {
+        status.setStatus("Lỗi: " + message);
+        if (showDialog) {
+            JOptionPane.showMessageDialog(
+                    this, message, "VoiceLink", JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
     private DirectChatPanel.ActionCallback buildDmCallback() {
         return new DirectChatPanel.ActionCallback() {
             @Override
             public void onSendMessage(PeerInfo peer, String text) {
-                ChatMessage msg = new ChatMessage(
+                if (direct != null) {
+                    direct.sendText(peer.id(), text);
+                    return;
+                }
+
+                onMessageReceived(new ChatMessage(
                         UUID.randomUUID().toString(),
                         "dm_" + peer.id(),
                         localUserId,
                         text,
-                        Instant.now());
-                chatHistory.add(msg);
-                DirectChatPanel panel = directChats.get(peer.id());
-                if (panel != null) {
-                    SwingUtilities.invokeLater(() -> panel.appendMessage(msg));
-                }
+                        Instant.now()));
             }
 
             @Override
@@ -308,16 +197,11 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
 
     private GroupChatPanel.ActionCallback buildGroupCallback() {
         return (room, text) -> {
-            ChatMessage msg = new ChatMessage(
-                    UUID.randomUUID().toString(),
-                    room.id(),
-                    localUserId,
-                    text,
-                    Instant.now());
-            chatHistory.add(msg);
-            GroupChatPanel panel = groupChats.get(room.id());
-            if (panel != null) {
-                SwingUtilities.invokeLater(() -> panel.appendMessage(msg));
+            if (groups != null) {
+                groups.sendText(room.id(), text);
+            } else {
+                onMessageReceived(new ChatMessage(UUID.randomUUID().toString(),
+                        room.id(), localUserId, text, Instant.now()));
             }
         };
     }
@@ -326,92 +210,88 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
         return new CallPanel.CallListener() {
             @Override
             public void onCallCancelled() {
-                if (calls != null)
-                    calls.endCall();
-                else
-                    ChatFrame.this.onCallEnded();
+                onCallEnded();
             }
 
             @Override
             public void onCallEnded() {
-                if (calls != null)
+                if (calls != null) {
                     calls.endCall();
-                else
+                } else {
                     ChatFrame.this.onCallEnded();
+                }
             }
 
             @Override
             public void onMuteToggled(boolean muted) {
-                if (calls != null)
+                if (calls != null) {
                     calls.setMuted(muted);
+                }
             }
         };
     }
 
-    // ── Public API (dùng cho tích hợp mạng sau này) ──────────────
-    public void onMessageReceived(ChatMessage msg) {
-        chatHistory.add(msg);
-        String roomId = msg.roomId();
-        if (roomId.startsWith("dm_")) {
-            String peerId = roomId.substring(3);
-            DirectChatPanel panel = directChats.get(peerId);
-            if (panel != null)
-                panel.appendMessage(msg);
+    public void onMessageReceived(ChatMessage message) {
+        content.appendMessage(message);
+    }
+
+    @Override
+    public void setPeers(List<PeerInfo> peers) {
+        Runnable update = () -> {
+            sidebar.setPeers(peers);
+            content.setConnectedPeers(peers);
+            status.setStatus("Đang kết nối với " + peers.size() + " peer.");
+        };
+        if (SwingUtilities.isEventDispatchThread()) {
+            update.run();
         } else {
-            GroupChatPanel panel = groupChats.get(roomId);
-            if (panel != null)
-                panel.appendMessage(msg);
+            SwingUtilities.invokeLater(update);
         }
     }
 
-    public void setPeers(List<PeerInfo> peers) {
-        Runnable update = () -> {
-            sidebarPanel.setPeers(peers);
-            Set<String> online = new HashSet<>();
-            for (PeerInfo peer : peers)
-                online.add(peer.id());
-            directChats.forEach((id, panel) -> panel.setConnected(online.contains(id)));
-            statusText.setText("Đang kết nối với " + peers.size() + " peer.");
-        };
-        if (SwingUtilities.isEventDispatchThread())
-            update.run();
-        else
-            SwingUtilities.invokeLater(update);
-    }
-
     public void setRooms(List<RoomInfo> rooms) {
-        SwingUtilities.invokeLater(() -> sidebarPanel.setRooms(rooms));
+        SwingUtilities.invokeLater(() -> sidebar.setRooms(rooms));
     }
 
     public void showIncomingCall(String callerName) {
-        SwingUtilities
-                .invokeLater(() -> new IncomingCallDialog(this, callerName, new IncomingCallDialog.ResponseListener() {
+        SwingUtilities.invokeLater(() -> new IncomingCallDialog(
+                this, callerName, new IncomingCallDialog.ResponseListener() {
                     @Override
                     public void onAccepted() {
-                        callPanel.setState(CallPanel.CallState.IN_CALL, callerName);
-                        cardLayout.show(contentPanel, CARD_CALL);
+                        content.callPanel().setState(CallPanel.CallState.IN_CALL, callerName);
+                        content.showCall();
                     }
 
                     @Override
                     public void onRejected() {
-                        // Từ chối cuộc gọi
+                        // Hỗ trợ giao diện demo cũ.
                     }
                 }).setVisible(true));
     }
 
     public void onCallEnded() {
-        callPanel.setState(CallPanel.CallState.IDLE, "");
-        if (currentCallPeer != null) {
-            String key = "dm_" + currentCallPeer.id();
-            if (directChats.containsKey(currentCallPeer.id())) {
-                cardLayout.show(contentPanel, key);
-            } else {
-                cardLayout.show(contentPanel, CARD_WELCOME);
-            }
-            currentCallPeer = null;
-        } else {
-            cardLayout.show(contentPanel, CARD_WELCOME);
-        }
+        content.callPanel().setState(CallPanel.CallState.IDLE, "");
+        content.showAfterCall(currentCallPeer);
+        currentCallPeer = null;
+    }
+
+    public void bindDirectChat(DirectChatCoordinator direct) {
+        this.direct = Objects.requireNonNull(direct);
+    }
+
+    @Override
+    public void onDirectHistory(String peerId, List<ChatMessage> messages) {
+        content.loadDirectHistory(peerId, messages);
+    }
+
+    @Override
+    public void onDirectSendFailed(String peerId, String text) {
+        content.restoreDirectDraft(peerId, text);
+    }
+
+    @Override
+    public void onDirectError(String message) {
+        onError(message, true);
     }
 
     public void bindCalls(CallCoordinator calls) {
@@ -421,17 +301,17 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
     @Override
     public void outgoing(PeerInfo peer) {
         currentCallPeer = peer;
-        callPanel.setState(CallPanel.CallState.RINGING, peer.username());
-        cardLayout.show(contentPanel, CARD_CALL);
-        statusText.setText("Đang gọi " + peer.username());
+        content.callPanel().setState(CallPanel.CallState.RINGING, peer.username());
+        content.showCall();
+        status.setStatus("Đang gọi " + peer.username());
     }
 
     @Override
     public void incoming(PeerInfo peer, String callId) {
         closeIncomingDialog();
         currentCallPeer = peer;
-        incomingDialog = new IncomingCallDialog(this, peer.username(),
-                new IncomingCallDialog.ResponseListener() {
+        incomingDialog = new IncomingCallDialog(
+                this, peer.username(), new IncomingCallDialog.ResponseListener() {
                     @Override
                     public void onAccepted() {
                         calls.accept(callId);
@@ -449,22 +329,22 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
     public void connected(PeerInfo peer) {
         closeIncomingDialog();
         currentCallPeer = peer;
-        callPanel.setMuteState(false);
-        callPanel.setState(CallPanel.CallState.IN_CALL, peer.username());
-        cardLayout.show(contentPanel, CARD_CALL);
-        statusText.setText("Đang gọi với " + peer.username());
+        content.callPanel().setMuteState(false);
+        content.callPanel().setState(CallPanel.CallState.IN_CALL, peer.username());
+        content.showCall();
+        status.setStatus("Đang gọi với " + peer.username());
     }
 
     @Override
     public void idle(String message) {
         closeIncomingDialog();
         onCallEnded();
-        statusText.setText(message);
+        status.setStatus(message);
     }
 
     @Override
     public void muted(boolean value) {
-        callPanel.setMuteState(value);
+        content.callPanel().setMuteState(value);
     }
 
     @Override
@@ -480,14 +360,13 @@ public final class ChatFrame extends JFrame implements SidebarPanel.SelectionLis
     }
 
     private void loadDemoData() {
-        List<PeerInfo> peers = List.of(
+        sidebar.setPeers(List.of(
                 new PeerInfo("peer_B", "User_B", "192.168.1.2", 5000, 5001),
                 new PeerInfo("peer_C", "User_C", "192.168.1.3", 5000, 5001),
-                new PeerInfo("peer_D", "User_D", "192.168.1.4", 5000, 5001));
+                new PeerInfo("peer_D", "User_D", "192.168.1.4", 5000, 5001)));
         demoRooms.addAll(List.of(
                 new RoomInfo("room_1", "Nhóm học nhóm", localUserId),
                 new RoomInfo("room_2", "Project Alpha", localUserId)));
-        sidebarPanel.setPeers(peers);
-        sidebarPanel.setRooms(new ArrayList<>(demoRooms));
+        sidebar.setRooms(new ArrayList<>(demoRooms));
     }
 }
