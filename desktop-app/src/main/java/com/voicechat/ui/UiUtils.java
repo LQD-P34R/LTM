@@ -679,14 +679,8 @@ public final class UiUtils {
             // 3. Vẽ chữ viết tắt (Initials) hoặc Icon
             g2.setColor(Color.WHITE);
             if (isGroup) {
-                // Nhóm: icon 👥 hoặc chữ GR
-                int fontSize = Math.max((int) (size * 0.44), 11);
-                g2.setFont(new Font("Segoe UI", Font.BOLD, fontSize));
-                FontMetrics fm = g2.getFontMetrics();
-                String icon = "\uD83D\uDC65"; // 👥
-                int tx = circleX + (size - fm.stringWidth(icon)) / 2;
-                int ty = circleY + (size - fm.getHeight()) / 2 + fm.getAscent();
-                g2.drawString(icon, tx, ty);
+                int iconSize = Math.max(12, size / 2);
+                UiIcon.GROUP.draw(g2,circleX+(size-iconSize)/2,circleY+(size-iconSize)/2,iconSize,Color.WHITE);
             } else {
                 String initials = getInitials(name);
                 int fontSize = initials.length() > 1

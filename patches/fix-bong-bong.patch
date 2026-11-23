@@ -1,0 +1,182 @@
+diff --git a/desktop-app/src/main/java/com/voicechat/ui/ChatBubbleRenderer.java b/desktop-app/src/main/java/com/voicechat/ui/ChatBubbleRenderer.java
+index 5704976..270a1c9 100644
+--- a/desktop-app/src/main/java/com/voicechat/ui/ChatBubbleRenderer.java
++++ b/desktop-app/src/main/java/com/voicechat/ui/ChatBubbleRenderer.java
+@@ -20,6 +20,12 @@ public final class ChatBubbleRenderer extends JPanel {
+ 
+     private static final int BUBBLE_ARC = 16;
+ 
++    private final JTextArea body = new JTextArea();
++    private final boolean outgoing;
++    private int naturalWidth;
++    private int metadataWidth;
++    private int measuredWidth = -1;
++
+     public ChatBubbleRenderer(ChatMessage msg, String localUserId) {
+         this(msg, localUserId, msg.senderId());
+     }
+@@ -27,6 +33,7 @@ public final class ChatBubbleRenderer extends JPanel {
+     public ChatBubbleRenderer(ChatMessage msg, String localUserId, String displayName) {
+         boolean isMine = msg.senderId().equals(localUserId);
+ 
++        outgoing = isMine;
+         setLayout(new BorderLayout());
+         setOpaque(false);
+         setBorder(new EmptyBorder(4, 16, 4, 16));
+@@ -49,6 +56,19 @@ public final class ChatBubbleRenderer extends JPanel {
+         return new Dimension(Integer.MAX_VALUE,getPreferredSize().height);
+     }
+ 
++    void fitTo(int rowWidth) {
++        // Reserve row insets, FlowLayout gaps and the optional incoming avatar.
++        int available = Math.max(1,rowWidth-48-(outgoing ? 0 : 36));
++        int cap = Math.max(1,Math.min(available,Math.round(rowWidth*0.74f))-28);
++        int width = Math.min(cap,Math.max(naturalWidth,metadataWidth));
++        if (width == measuredWidth) return;
++        measuredWidth = width;
++        body.setPreferredSize(null);
++        body.setSize(width,Short.MAX_VALUE);
++        body.setPreferredSize(new Dimension(width,body.getPreferredSize().height));
++        invalidate();
++    }
++
+     private JPanel buildBubble(ChatMessage msg, boolean isMine, String displayName) {
+         JPanel bubble = new JPanel(new BorderLayout(0, 3)) {
+             @Override
+@@ -82,26 +102,24 @@ public final class ChatBubbleRenderer extends JPanel {
+             JLabel senderLbl = new JLabel(displayName);
+             senderLbl.setFont(UiUtils.F_SMALL_BOLD);
+             senderLbl.setForeground(UiUtils.avatarColorFor(displayName));
++            metadataWidth = senderLbl.getPreferredSize().width;
+             bubble.add(senderLbl, BorderLayout.NORTH);
+         }
+ 
+         // Nội dung tin nhắn
+-        JTextArea textArea = new JTextArea(msg.text());
+-        textArea.setFont(UiUtils.F_BODY);
+-        textArea.setForeground(isMine ? UiUtils.C_TEXT_LIGHT : UiUtils.C_TEXT_PRIMARY);
+-        textArea.setOpaque(false);
+-        textArea.setEditable(false);
+-        textArea.setFocusable(false);
+-        textArea.setLineWrap(true);
+-        textArea.setWrapStyleWord(true);
+-        int width = 1;
+-        FontMetrics metrics = textArea.getFontMetrics(textArea.getFont());
+-        for (String line : msg.text().split("\n",-1)) width = Math.max(width,metrics.stringWidth(line)+2);
+-        width = Math.min(270,width);
+-        textArea.setSize(width,Integer.MAX_VALUE / 4);
+-        textArea.setPreferredSize(new Dimension(width,textArea.getPreferredSize().height));
+-        bubble.setMaximumSize(new Dimension(420, Integer.MAX_VALUE));
+-        bubble.add(textArea, BorderLayout.CENTER);
++        body.setFont(UiUtils.F_BODY);
++        body.setText(msg.text());
++        body.setOpaque(false);
++        body.setEditable(false);
++        body.setFocusable(false);
++        body.setBorder(null);
++        body.setMargin(new Insets(0,0,0,0));
++        body.setForeground(isMine ? UiUtils.C_TEXT_LIGHT : UiUtils.C_TEXT_PRIMARY);
++        // Measure with the actual Swing text UI before enabling wrapping.
++        naturalWidth = body.getPreferredSize().width + 6;
++        body.setLineWrap(true);
++        body.setWrapStyleWord(true);
++        bubble.add(body,BorderLayout.CENTER);
+ 
+         // Footer: Thời gian
+         JPanel footer = new JPanel(new FlowLayout(
+@@ -112,6 +130,7 @@ public final class ChatBubbleRenderer extends JPanel {
+         JLabel timeLbl = new JLabel(timeStr);
+         timeLbl.setFont(UiUtils.F_SMALL);
+         timeLbl.setForeground(isMine ? new Color(255, 255, 255, 190) : UiUtils.C_TEXT_MUTED);
++        metadataWidth = Math.max(metadataWidth,timeLbl.getPreferredSize().width);
+         footer.add(timeLbl);
+ 
+         bubble.add(footer, BorderLayout.SOUTH);
+diff --git a/desktop-app/src/main/java/com/voicechat/ui/DirectChatPanel.java b/desktop-app/src/main/java/com/voicechat/ui/DirectChatPanel.java
+index 025fdc8..f1d20b7 100644
+--- a/desktop-app/src/main/java/com/voicechat/ui/DirectChatPanel.java
++++ b/desktop-app/src/main/java/com/voicechat/ui/DirectChatPanel.java
+@@ -22,7 +22,7 @@ public final class DirectChatPanel extends JPanel {
+     }
+ 
+     private final String        localUserId;
+-    private final JPanel        messageContainer = new JPanel();
++    private final JPanel        messageContainer = new MessageList();
+     private JScrollPane         scrollPane;
+     private final InputComposer composer;
+ 
+@@ -89,7 +89,6 @@ public final class DirectChatPanel extends JPanel {
+ 
+     // ── Message area ──────────────────────────────────────────────
+     private JScrollPane buildMessageArea() {
+-        messageContainer.setLayout(new BoxLayout(messageContainer, BoxLayout.Y_AXIS));
+         messageContainer.setBackground(UiUtils.C_APP_BG);
+         messageContainer.setBorder(new EmptyBorder(12, 0, 12, 0));
+ 
+diff --git a/desktop-app/src/main/java/com/voicechat/ui/GroupChatPanel.java b/desktop-app/src/main/java/com/voicechat/ui/GroupChatPanel.java
+index ebb179a..bb5935c 100644
+--- a/desktop-app/src/main/java/com/voicechat/ui/GroupChatPanel.java
++++ b/desktop-app/src/main/java/com/voicechat/ui/GroupChatPanel.java
+@@ -22,7 +22,7 @@ public final class GroupChatPanel extends JPanel {
+     }
+ 
+     private final String        localUserId;
+-    private final JPanel        messageContainer = new JPanel();
++    private final JPanel        messageContainer = new MessageList();
+     private final JPanel        memberListPanel  = new JPanel();
+     private JScrollPane         scrollPane;
+     private JLabel              memberCountLbl;
+@@ -129,7 +129,6 @@ public final class GroupChatPanel extends JPanel {
+ 
+     // ── Message area ──────────────────────────────────────────────
+     private JScrollPane buildMessageArea() {
+-        messageContainer.setLayout(new BoxLayout(messageContainer, BoxLayout.Y_AXIS));
+         messageContainer.setBackground(UiUtils.C_APP_BG);
+         messageContainer.setBorder(new EmptyBorder(12, 0, 12, 0));
+ 
+diff --git a/desktop-app/src/main/java/com/voicechat/ui/MessageList.java b/desktop-app/src/main/java/com/voicechat/ui/MessageList.java
+new file mode 100644
+index 0000000..244423f
+--- /dev/null
++++ b/desktop-app/src/main/java/com/voicechat/ui/MessageList.java
+@@ -0,0 +1,40 @@
++package com.voicechat.ui;
++
++import javax.swing.*;
++import java.awt.*;
++
++/** A vertical transcript whose rows wrap to the actual viewport, including after resize. */
++final class MessageList extends JPanel implements Scrollable {
++    MessageList() { super(null); }
++
++    private int transcriptWidth() {
++        if (getParent() instanceof JViewport viewport && viewport.getExtentSize().width > 0)
++            return viewport.getExtentSize().width;
++        return getWidth() > 0 ? getWidth() : 480;
++    }
++
++    private int arrange(int width, boolean position) {
++        Insets insets = getInsets();
++        int available = Math.max(1,width-insets.left-insets.right);
++        int y = insets.top;
++        for (Component component : getComponents()) {
++            ChatBubbleRenderer row = (ChatBubbleRenderer) component;
++            row.fitTo(available);
++            int height = row.getPreferredSize().height;
++            if (position) row.setBounds(insets.left,y,available,height);
++            y += height;
++        }
++        return y+insets.bottom;
++    }
++
++    @Override public Dimension getPreferredSize() {
++        int width = transcriptWidth();
++        return new Dimension(width,arrange(width,false));
++    }
++    @Override public void doLayout() { arrange(getWidth(),true); }
++    @Override public boolean getScrollableTracksViewportWidth() { return true; }
++    @Override public boolean getScrollableTracksViewportHeight() { return false; }
++    @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
++    @Override public int getScrollableUnitIncrement(Rectangle r,int orientation,int direction) { return 16; }
++    @Override public int getScrollableBlockIncrement(Rectangle r,int orientation,int direction) { return Math.max(16,r.height-16); }
++}

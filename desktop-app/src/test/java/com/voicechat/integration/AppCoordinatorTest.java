@@ -1,6 +1,9 @@
 package com.voicechat.integration;
 
 import com.voicechat.chat.ChatService;
+import com.voicechat.chat.DirectChatProtocol;
+import com.voicechat.database.DatabaseManager;
+import com.voicechat.database.HistoryRepository;
 import com.voicechat.common.api.VoiceGateway;
 import com.voicechat.common.model.ChatMessage;
 import com.voicechat.common.model.ControlMessage;
@@ -8,6 +11,7 @@ import com.voicechat.common.model.PeerInfo;
 import com.voicechat.network.PeerManager;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
@@ -15,10 +19,13 @@ import javax.swing.SwingUtilities;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.Rule;
+import org.junit.rules.TemporaryFolder;
 import static org.junit.Assert.*;
 
 /** Exercises the same shared TCP router used by DesktopSession, with real sockets. */
 public class AppCoordinatorTest {
+    @Rule public TemporaryFolder files = new TemporaryFolder();
     private final PeerManager aNet = new PeerManager("An");
     private final PeerManager bNet = new PeerManager("Bình");
     private final TestView aView = new TestView();
@@ -61,6 +68,7 @@ public class AppCoordinatorTest {
         assertEquals("dm_Bình", aView.sent.get(0).roomId());
         assertEquals("An", bView.received.get(0).senderId());
         assertEquals(aView.sent.get(0).sentAt(), bView.received.get(0).sentAt());
+        assertEquals(aView.sent.get(0).id(), bView.received.get(0).id());
         for (int i = 0; i < 30; i++) {
             assertEquals("A-" + i, bView.received.get(i + 1).text());
             assertEquals("B-" + i, aView.received.get(i + 1).text());
@@ -130,6 +138,37 @@ public class AppCoordinatorTest {
                 "An", target, room, text, time));
     }
 
+    @Test public void keepsPersistentHistoryAfterSessionReopens() throws Exception {
+        String database = files.newFile("direct.db").getAbsolutePath();
+        a.closeAsync().get(4, TimeUnit.SECONDS);
+        await(() -> bNet.connectedPeerIds().isEmpty());
+        a = new AppCoordinator(aNet, aVoice, "An", aView,
+                new HistoryRepository(new DatabaseManager(database)));
+        int port = aNet.startListening(0, 0);
+        bNet.connect("127.0.0.1", port);
+        a.sendText("Bình", "Tin nhắn được lưu sau khi mở lại");
+        await(() -> aView.sent.size() == 1 && bView.received.size() == 1);
+        a.closeAsync().get(4, TimeUnit.SECONDS);
+        a = new AppCoordinator(aNet, aVoice, "An", aView,
+                new HistoryRepository(new DatabaseManager(database)));
+        a.loadHistory("Bình");
+        await(() -> aView.history.size() == 1);
+        assertEquals(aView.sent.get(0).id(), aView.history.get(0).id());
+        assertEquals("Tin nhắn được lưu sau khi mở lại", aView.history.get(0).text());
+    }
+
+    @Test public void ignoresRepeatedMessageIds() throws Exception {
+        String id = UUID.randomUUID().toString();
+        String room = DirectChatProtocol.conversationId("An", "Bình");
+        String payload = DirectChatProtocol.encode(id, "Tin nhắn chỉ hiển thị một lần");
+        sendRaw("Bình", room, payload, Instant.now());
+        sendRaw("Bình", room, payload, Instant.now());
+        a.sendText("Bình", "Tin tiếp theo");
+        await(() -> bView.received.size() >= 2);
+        assertEquals(2, bView.received.size());
+        assertEquals(id, bView.received.get(0).id());
+    }
+
     private static void await(BooleanSupplier condition) throws Exception {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (!condition.getAsBoolean()) {
@@ -146,11 +185,15 @@ public class AppCoordinatorTest {
         final List<Failure> failures = new CopyOnWriteArrayList<>();
         final List<String> errors = new CopyOnWriteArrayList<>();
         volatile List<PeerInfo> peers = List.of();
+        volatile List<ChatMessage> history = List.of();
         volatile String callId;
         volatile boolean wrongThread;
         private void checkThread() { wrongThread |= !SwingUtilities.isEventDispatchThread(); }
         public void onMessageReceived(ChatMessage m) { checkThread(); received.add(m); }
         public void onMessageSent(ChatMessage m) { checkThread(); sent.add(m); }
+        public void onChatHistory(String peerId, List<ChatMessage> messages) {
+            checkThread(); history = messages;
+        }
         public void onMessageSendFailed(String id, String text, String reason) {
             checkThread(); failures.add(new Failure(id, text, reason));
         }

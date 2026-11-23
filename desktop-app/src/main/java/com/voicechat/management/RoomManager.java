@@ -1,25 +1,33 @@
 package com.voicechat.management;
 
 import com.voicechat.common.api.RoomGateway;
-import com.voicechat.common.model.PeerInfo;
-import com.voicechat.common.model.RoomInfo;
-import java.util.List;
+import com.voicechat.common.model.*;
+import com.voicechat.database.DatabaseManager;
+import java.util.*;
+import static com.voicechat.database.DatabaseManager.*;
 
-/**
- * SHARED - CA NHOM: Quan ly phong, thanh vien va dong bo trang thai.
- * Hien tai chi la skeleton, chua dong bo qua mang.
- */
 public final class RoomManager implements RoomGateway {
-    @Override public RoomInfo createRoom(String name, String ownerPeerId) {
-        throw new UnsupportedOperationException("TEAM TODO: create room + notify peers");
+    private final DatabaseManager db;
+    public RoomManager() { this(new DatabaseManager()); }
+    public RoomManager(DatabaseManager db) { this.db = db; }
+    public RoomInfo createRoom(String name,String owner) {
+        var room = new RoomInfo(UUID.randomUUID().toString(),label(name,80),owner);
+        return db.transaction(c -> {
+            update(c,"INSERT INTO rooms VALUES(?,?,?)",room.id(),room.name(),owner);
+            update(c,"INSERT INTO members VALUES(?,?)",room.id(),owner);
+            return room;
+        });
     }
-    @Override public void joinRoom(String roomId, PeerInfo peer) {
-        throw new UnsupportedOperationException("TEAM TODO: join room + sync peers");
+    public void joinRoom(String room,PeerInfo peer) {
+        db.transaction(c -> update(c,"INSERT INTO members VALUES(?,?) ON CONFLICT DO NOTHING",room,peer.id()));
     }
-    @Override public void leaveRoom(String roomId, String peerId) {
-        throw new UnsupportedOperationException("TEAM TODO: leave room + sync peers");
+    public void leaveRoom(String room,String id) {
+        db.transaction(c -> update(c,"DELETE FROM members WHERE room=? AND peer=?",room,id));
     }
-    @Override public List<PeerInfo> getMembers(String roomId) {
-        throw new UnsupportedOperationException("TEAM TODO: query room members");
+    public List<PeerInfo> getMembers(String room) {
+        return db.transaction(c -> query(c,"SELECT u.* FROM users u JOIN members m ON m.peer=u.id WHERE m.room=? ORDER BY name_key",UserManager::peer,room));
+    }
+    public List<RoomInfo> listRooms() {
+        return db.transaction(c -> query(c,"SELECT * FROM rooms ORDER BY name,id",r -> new RoomInfo(r.getString(1),r.getString(2),r.getString(3))));
     }
 }

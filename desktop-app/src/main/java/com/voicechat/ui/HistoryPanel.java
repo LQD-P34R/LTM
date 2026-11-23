@@ -50,7 +50,7 @@ public final class HistoryPanel extends JPanel {
         JPanel left = new JPanel(new GridLayout(2, 1, 0, 4));
         left.setOpaque(false);
 
-        JLabel titleLbl = new JLabel("\uD83D\uDCDC  Lịch sử cuộc trò chuyện");
+        JLabel titleLbl = new JLabel("Lịch sử cuộc trò chuyện",UiIcon.HISTORY,SwingConstants.LEADING);
         titleLbl.setFont(UiUtils.F_TITLE_LG);
         titleLbl.setForeground(UiUtils.C_TEXT_PRIMARY);
 
