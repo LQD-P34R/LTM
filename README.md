@@ -41,6 +41,22 @@ desktop-app -> chat-core  -> network-core
 desktop-app -> network-core
 ```
 
+## Tải bản chạy sẵn
+
+[Tải VoiceLink.jar](https://github.com/LQD-P34R/LTM/raw/refs/heads/main/lib/VoiceLink.jar)
+để chạy trên máy khác. File này nằm trong thư mục `lib` và đã chứa các thư viện
+phụ thuộc. Cả hai máy cần Java 21; không cần Maven khi dùng bản JAR có sẵn.
+
+Ví dụ, lưu file tại `C:\VoiceChat\VoiceLink.jar`, rồi mở PowerShell và chạy:
+
+```powershell
+java -jar "C:\VoiceChat\VoiceLink.jar"
+```
+
+Dùng cùng bản JAR trên cả hai máy và cấu hình kết nối theo phần bên dưới.
+Thư mục `target` được Git bỏ qua; bản đóng gói để chia sẻ trên GitHub là
+`lib/VoiceLink.jar`.
+
 ## Build và mở ứng dụng
 
 Cần **JDK 21** và **Maven** trong PATH. Các lệnh dưới chạy từ thư mục gốc
@@ -52,6 +68,11 @@ java -jar desktop-app/target/desktop-app-1.0-SNAPSHOT-all.jar
 ```
 
 Các ví dụ sử dụng JAR vừa build trong `desktop-app/target/`.
+Sau khi đổi mã nguồn và build thành công, cập nhật bản JAR chia sẻ trước khi commit:
+
+```powershell
+Copy-Item -LiteralPath "desktop-app/target/desktop-app-1.0-SNAPSHOT-all.jar" -Destination "lib/VoiceLink.jar"
+```
 
 ## Chat và gọi thoại 1-1
 
