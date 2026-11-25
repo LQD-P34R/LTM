@@ -43,6 +43,12 @@ desktop-app -> network-core
 
 ## Tải bản chạy sẵn
 
+[Tải bộ cài Windows VoiceLink-1.0.exe](https://github.com/LQD-P34R/LTM/raw/refs/heads/main/installer/VoiceLink-1.0.exe)
+(khoảng 70 MB). Chạy file này và làm theo hướng dẫn cài đặt, sau đó mở VoiceLink
+từ shortcut hoặc Start Menu. Bộ cài đã kèm Java; máy khách không cần cài Java,
+Maven hay WiX và không cần clone dự án. Dùng cùng bản cài trên cả hai máy,
+rồi cấu hình IP và cổng theo hướng dẫn bên dưới.
+
 [Tải VoiceLink.jar](https://github.com/LQD-P34R/LTM/raw/refs/heads/main/lib/VoiceLink.jar)
 để chạy trên máy khác. File này nằm trong thư mục `lib` và đã chứa các thư viện
 phụ thuộc. Cả hai máy cần Java 21; không cần Maven khi dùng bản JAR có sẵn.
