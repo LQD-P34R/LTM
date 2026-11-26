@@ -20,11 +20,14 @@ import java.util.List;
  * </p>
  */
 public final class GroupChatPanel extends JPanel {
-
+    // ===== Dữ liệu và các kiểu hỗ trợ =====
+    // Các trường lưu cấu hình/trạng thái; các kiểu lồng nhau mô tả dữ liệu và hợp đồng dùng trong lớp.
     public interface ActionCallback {
+
+        // ===== Gửi tin từ khung chat nhóm =====
+        // Chuyển phòng đích và nội dung tin từ ô soạn cho lớp tích hợp.
         void onSendMessage(RoomInfo room, String text);
     }
-
     private final String localUserId;
     private final JPanel messageContainer = new MessageList();
     private final JPanel memberListPanel = new JPanel();
@@ -36,27 +39,8 @@ public final class GroupChatPanel extends JPanel {
     private java.util.Map<String, String> names = java.util.Map.of();
     private boolean joined;
 
-    public void bindMembership(java.util.function.Consumer<Boolean> change) {
-        membership.setVisible(true);
-        membership.addActionListener(e -> change.accept(!joined));
-        showMembership(false);
-    }
-
-    public void showMembership(boolean value) {
-        joined = value;
-        membership.setText(value ? "Rời phòng" : "Tham gia");
-        composer.setVisible(value);
-    }
-
-    public void setDisplayNames(java.util.Map<String, String> names) {
-        this.names = names;
-    }
-
-    public void restoreDraft(String text) {
-        if (composer.getText().isEmpty())
-            composer.setText(text);
-    }
-
+    // ===== Khởi tạo và bố trí khung chat nhóm =====
+    // Tạo header phòng, vùng tin nhắn, danh sách thành viên và ô soạn tin.
     public GroupChatPanel(RoomInfo room, String localUserId, ActionCallback callback) {
         this.localUserId = localUserId;
         setLayout(new BorderLayout());
@@ -73,7 +57,6 @@ public final class GroupChatPanel extends JPanel {
         add(composer, BorderLayout.SOUTH);
     }
 
-    // ── Header ────────────────────────────────────────────────────
     private JPanel buildHeader(RoomInfo room) {
         JPanel header = new JPanel(new BorderLayout(14, 0));
         header.setBackground(UiUtils.C_CARD_BG);
@@ -137,7 +120,6 @@ public final class GroupChatPanel extends JPanel {
         return header;
     }
 
-    // ── Message area ──────────────────────────────────────────────
     private JScrollPane buildMessageArea() {
         messageContainer.setBackground(UiUtils.C_APP_BG);
         messageContainer.setBorder(new EmptyBorder(12, 0, 12, 0));
@@ -151,7 +133,6 @@ public final class GroupChatPanel extends JPanel {
         return scrollPane;
     }
 
-    // ── Member panel ──────────────────────────────────────────────
     private JPanel buildMemberPanel() {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(UiUtils.C_CARD_BG);
@@ -182,6 +163,20 @@ public final class GroupChatPanel extends JPanel {
         return panel;
     }
 
+    // ===== Thành viên và quyền gửi trong phòng =====
+    // Gắn nút tham gia/rời phòng, ẩn/hiện ô soạn và cập nhật thành viên/tên hiển thị.
+    public void bindMembership(java.util.function.Consumer<Boolean> change) {
+        membership.setVisible(true);
+        membership.addActionListener(e -> change.accept(!joined));
+        showMembership(false);
+    }
+
+    public void showMembership(boolean value) {
+        joined = value;
+        membership.setText(value ? "Rời phòng" : "Tham gia");
+        composer.setVisible(value);
+    }
+
     public void setMembers(List<PeerInfo> members) {
         memberListPanel.removeAll();
         for (PeerInfo member : members) {
@@ -205,6 +200,12 @@ public final class GroupChatPanel extends JPanel {
         memberListPanel.repaint();
     }
 
+    public void setDisplayNames(java.util.Map<String, String> names) {
+        this.names = names;
+    }
+
+    // ===== Tin nhắn, lịch sử và bản nháp =====
+    // Hiển thị tin theo người gửi, phục hồi bản nháp và cuộn tới tin cuối.
     public void appendMessage(ChatMessage msg) {
         ChatBubbleRenderer bubble = new ChatBubbleRenderer(msg, localUserId,
                 names.getOrDefault(msg.senderId(), msg.senderId()));
@@ -231,6 +232,11 @@ public final class GroupChatPanel extends JPanel {
         messageContainer.removeAll();
         messageContainer.revalidate();
         messageContainer.repaint();
+    }
+
+    public void restoreDraft(String text) {
+        if (composer.getText().isEmpty())
+            composer.setText(text);
     }
 
     private void scrollToBottom() {

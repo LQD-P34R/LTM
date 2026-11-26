@@ -7,8 +7,12 @@ import javax.swing.border.MatteBorder;
 
 /** Thanh trạng thái và nút chuyển sang màn hình cuộc gọi. */
 final class ChatStatusBar extends JPanel {
+    // ===== Cấu hình và trạng thái =====
+    // Các hằng số và biến được các khối chức năng bên dưới sử dụng.
     private final JLabel status = new JLabel();
 
+    // ===== Khởi tạo thanh trạng thái =====
+    // Tạo nhãn trạng thái và nút quay lại màn hình cuộc gọi.
     ChatStatusBar(String username, Runnable showCall) {
         super(new BorderLayout());
         setBackground(UiUtils.C_CARD_BG);
@@ -40,6 +44,8 @@ final class ChatStatusBar extends JPanel {
         add(version, BorderLayout.EAST);
     }
 
+    // ===== Cập nhật thông báo trạng thái =====
+    // Thay nội dung nhãn ở đáy cửa sổ chat.
     void setStatus(String text) {
         status.setText(text);
     }

@@ -17,13 +17,16 @@ import java.util.List;
  * </p>
  */
 public final class DirectChatPanel extends JPanel {
-
+    // ===== Dữ liệu và các kiểu hỗ trợ =====
+    // Các trường lưu cấu hình/trạng thái; các kiểu lồng nhau mô tả dữ liệu và hợp đồng dùng trong lớp.
     public interface ActionCallback {
+
+        // ===== Thao tác trong hội thoại trực tiếp =====
+        // Giao diện chuyển peer và nội dung gửi hoặc yêu cầu gọi cho lớp tích hợp.
         void onSendMessage(PeerInfo peer, String text);
 
         void onCallRequested(PeerInfo peer);
     }
-
     private final String localUserId;
     private final JPanel messageContainer = new JPanel();
     private JScrollPane scrollPane;
@@ -34,6 +37,8 @@ public final class DirectChatPanel extends JPanel {
     private boolean connected = true;
     private boolean sending;
 
+    // ===== Khởi tạo và bố trí khung chat =====
+    // Tạo header, vùng tin nhắn và ô soạn; nối nút gửi/gọi với callback.
     public DirectChatPanel(PeerInfo peer, String localUserId, ActionCallback callback) {
         this.localUserId = localUserId;
         setLayout(new BorderLayout());
@@ -49,7 +54,6 @@ public final class DirectChatPanel extends JPanel {
         add(composer, BorderLayout.SOUTH);
     }
 
-    // ── Header phẳng hiện đại ─────────────────────────────────────
     private JPanel buildHeader(PeerInfo peer, ActionCallback callback) {
         JPanel header = new JPanel(new BorderLayout(14, 0));
         header.setBackground(UiUtils.C_CARD_BG);
@@ -94,7 +98,22 @@ public final class DirectChatPanel extends JPanel {
         return header;
     }
 
-    // ── Message area ──────────────────────────────────────────────
+    private JScrollPane buildMessageArea() {
+        messageContainer.setLayout(new BoxLayout(messageContainer, BoxLayout.Y_AXIS));
+        messageContainer.setBackground(UiUtils.C_APP_BG);
+        messageContainer.setBorder(new EmptyBorder(12, 0, 12, 0));
+
+        scrollPane = new JScrollPane(messageContainer);
+        scrollPane.setBorder(null);
+        scrollPane.setBackground(UiUtils.C_APP_BG);
+        scrollPane.getViewport().setBackground(UiUtils.C_APP_BG);
+        scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        return scrollPane;
+    }
+
+    // ===== Trạng thái kết nối và bản nháp =====
+    // Bật/tắt gửi/gọi theo kết nối, theo dõi gửi đang chờ và phục hồi nội dung khi lỗi.
     public void setConnected(boolean online) {
         connected = online;
         avatar.setOnline(online);
@@ -115,20 +134,14 @@ public final class DirectChatPanel extends JPanel {
         if (connected) composer.requestInputFocus();
     }
 
-    private JScrollPane buildMessageArea() {
-        messageContainer.setLayout(new BoxLayout(messageContainer, BoxLayout.Y_AXIS));
-        messageContainer.setBackground(UiUtils.C_APP_BG);
-        messageContainer.setBorder(new EmptyBorder(12, 0, 12, 0));
-
-        scrollPane = new JScrollPane(messageContainer);
-        scrollPane.setBorder(null);
-        scrollPane.setBackground(UiUtils.C_APP_BG);
-        scrollPane.getViewport().setBackground(UiUtils.C_APP_BG);
-        scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
-        return scrollPane;
+    public void restoreDraft(String text) {
+        if (composer.getText().isEmpty()) {
+            composer.setText(text);
+        }
     }
 
+    // ===== Hiển thị tin nhắn và lịch sử =====
+    // Thêm, nạp lại hoặc xóa bong bóng tin nhắn rồi cuộn tới cuối khi cần.
     public void appendMessage(ChatMessage msg) {
         ChatBubbleRenderer bubble = new ChatBubbleRenderer(msg, localUserId);
         bubble.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -147,12 +160,6 @@ public final class DirectChatPanel extends JPanel {
         messageContainer.revalidate();
         messageContainer.repaint();
         scrollToBottom();
-    }
-
-    public void restoreDraft(String text) {
-        if (composer.getText().isEmpty()) {
-            composer.setText(text);
-        }
     }
 
     public void clearMessages() {

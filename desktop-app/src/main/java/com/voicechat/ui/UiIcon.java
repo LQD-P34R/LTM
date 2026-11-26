@@ -5,12 +5,23 @@ import javax.swing.Icon;
 
 /** VoiceLink controls are drawn in logical pixels, including on high-DPI displays. */
 enum UiIcon implements Icon {
+    // ===== Các loại biểu tượng =====
+    // Các giá trị enum chọn hình vẽ được dùng cho từng nút chức năng.
     CHAT, GROUP, HISTORY, PHONE, SMILE, SEND, MIC, SPEAKER, CLOSE;
+
+    // ===== Kích thước icon =====
+    // Cung cấp kích thước logic 18 x 18 cho Swing.
     public int getIconWidth() { return 18; }
+
     public int getIconHeight() { return 18; }
+
+
+    // ===== Vẽ biểu tượng =====
+    // Chọn hình theo loại icon và co giãn nét vẽ Graphics2D theo kích thước yêu cầu.
     public void paintIcon(Component c, Graphics g, int x, int y) {
         draw(g,x,y,18,c.getForeground());
     }
+
     void draw(Graphics g,int x,int y,int size,Color color) {
         Graphics2D p = (Graphics2D) g.create();
         try {

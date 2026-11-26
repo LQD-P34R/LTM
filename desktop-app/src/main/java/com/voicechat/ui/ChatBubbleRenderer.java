@@ -14,18 +14,19 @@ import java.time.format.DateTimeFormatter;
  * Tin nhắn người khác: căn trái, thẻ trắng tinh C_CARD_BG có viền mảnh 1px C_BORDER, kèm avatar nhỏ.</p>
  */
 public final class ChatBubbleRenderer extends JPanel {
-
+    // ===== Cấu hình và trạng thái =====
+    // Các hằng số và biến được các khối chức năng bên dưới sử dụng.
     private static final DateTimeFormatter TIME_FMT =
             DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault());
-
     private static final int BUBBLE_ARC = 16;
-
     private final JTextArea body = new JTextArea();
     private final boolean outgoing;
     private int naturalWidth;
     private int metadataWidth;
     private int measuredWidth = -1;
 
+    // ===== Khởi tạo bong bóng tin nhắn =====
+    // Xác định tin của mình/người khác, tạo nội dung, tên hiển thị và thời gian gửi.
     public ChatBubbleRenderer(ChatMessage msg, String localUserId) {
         this(msg, localUserId, msg.senderId());
     }
@@ -50,23 +51,6 @@ public final class ChatBubbleRenderer extends JPanel {
 
         row.add(buildBubble(msg, isMine, displayName));
         add(row, BorderLayout.CENTER);
-    }
-
-    @Override public Dimension getMaximumSize() {
-        return new Dimension(Integer.MAX_VALUE,getPreferredSize().height);
-    }
-
-    void fitTo(int rowWidth) {
-        // Reserve row insets, FlowLayout gaps and the optional incoming avatar.
-        int available = Math.max(1,rowWidth-48-(outgoing ? 0 : 36));
-        int cap = Math.max(1,Math.min(available,Math.round(rowWidth*0.74f))-28);
-        int width = Math.min(cap,Math.max(naturalWidth,metadataWidth));
-        if (width == measuredWidth) return;
-        measuredWidth = width;
-        body.setPreferredSize(null);
-        body.setSize(width,Short.MAX_VALUE);
-        body.setPreferredSize(new Dimension(width,body.getPreferredSize().height));
-        invalidate();
     }
 
     private JPanel buildBubble(ChatMessage msg, boolean isMine, String displayName) {
@@ -135,5 +119,24 @@ public final class ChatBubbleRenderer extends JPanel {
 
         bubble.add(footer, BorderLayout.SOUTH);
         return bubble;
+    }
+
+    // ===== Đo kích thước và xuống dòng =====
+    // Giới hạn chiều rộng theo vùng chat và tính lại chiều cao khi khung hiển thị thay đổi.
+    void fitTo(int rowWidth) {
+        // Reserve row insets, FlowLayout gaps and the optional incoming avatar.
+        int available = Math.max(1,rowWidth-48-(outgoing ? 0 : 36));
+        int cap = Math.max(1,Math.min(available,Math.round(rowWidth*0.74f))-28);
+        int width = Math.min(cap,Math.max(naturalWidth,metadataWidth));
+        if (width == measuredWidth) return;
+        measuredWidth = width;
+        body.setPreferredSize(null);
+        body.setSize(width,Short.MAX_VALUE);
+        body.setPreferredSize(new Dimension(width,body.getPreferredSize().height));
+        invalidate();
+    }
+
+    @Override public Dimension getMaximumSize() {
+        return new Dimension(Integer.MAX_VALUE,getPreferredSize().height);
     }
 }

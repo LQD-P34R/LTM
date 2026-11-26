@@ -13,15 +13,21 @@ import java.util.UUID;
 
 /** Nghiệp vụ chat trực tiếp; không chứa giao diện Swing. */
 public final class ChatService {
+    // ===== Cấu hình và trạng thái =====
+    // Các hằng số và biến được các khối chức năng bên dưới sử dụng.
     public static final int MAX_TEXT_LENGTH = DirectChatProtocol.MAX_TEXT_LENGTH;
     private final NetworkGateway network;
     private final HistoryStore history;
 
+    // ===== Khởi tạo nghiệp vụ chat =====
+    // Nhận tầng mạng và kho lịch sử qua interface để không phụ thuộc giao diện.
     public ChatService(NetworkGateway network, HistoryStore history) {
         this.network = Objects.requireNonNull(network);
         this.history = Objects.requireNonNull(history);
     }
 
+    // ===== Gửi tin nhắn trực tiếp =====
+    // Tạo ID, kiểm tra payload, gửi qua mạng rồi lưu tin vào lịch sử.
     public ChatMessage sendDirect(
             String localPeerId,
             String targetPeerId,
@@ -53,6 +59,8 @@ public final class ChatService {
         return chat;
     }
 
+    // ===== Nhận tin nhắn trực tiếp =====
+    // Kiểm tra người nhận/mã hội thoại, giải mã nội dung và lưu tin hợp lệ.
     public ChatMessage receiveDirect(
             String localPeerId,
             ControlMessage control) throws IOException {
@@ -89,6 +97,8 @@ public final class ChatService {
         return chat;
     }
 
+    // ===== Đọc lịch sử hội thoại =====
+    // Tính cùng một mã hội thoại cho hai peer rồi truy vấn kho lịch sử.
     public List<ChatMessage> directHistory(
             String localPeerId,
             String otherPeerId) {

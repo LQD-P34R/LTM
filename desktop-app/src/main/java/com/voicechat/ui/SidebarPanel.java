@@ -22,9 +22,12 @@ import java.util.List;
  * </p>
  */
 public final class SidebarPanel extends JPanel {
-
-    // ── Callback giao tiếp với ChatFrame ─────────────────────────
+    // ===== Dữ liệu và các kiểu hỗ trợ =====
+    // Các trường lưu cấu hình/trạng thái; các kiểu lồng nhau mô tả dữ liệu và hợp đồng dùng trong lớp.
     public interface SelectionListener {
+
+        // ===== Điều hướng từ thanh bên =====
+        // Báo peer/phòng được chọn hoặc yêu cầu mở lịch sử/tạo nhóm cho ChatFrame.
         void onPeerSelected(PeerInfo peer);
 
         void onRoomSelected(RoomInfo room);
@@ -33,8 +36,6 @@ public final class SidebarPanel extends JPanel {
 
         void onCreateGroupRequested();
     }
-
-    // ── State ─────────────────────────────────────────────────────
     private final SelectionListener listener;
     private final JPanel peerListPanel = new JPanel();
     private final JPanel roomListPanel = new JPanel();
@@ -42,7 +43,59 @@ public final class SidebarPanel extends JPanel {
     private List<PeerInfo> allPeers = new ArrayList<>();
     private List<RoomInfo> allRooms = new ArrayList<>();
     private Object selectedItem = null; // PeerInfo | RoomInfo
+    private static final class ThinScrollBarUI extends javax.swing.plaf.basic.BasicScrollBarUI {
+        // ===== Cấu hình và trạng thái =====
+        // Các hằng số và biến được các khối chức năng bên dưới sử dụng.
+        private static final Color THUMB = new Color(0x94, 0xA3, 0xB8, 140);
+        private static final Color TRACK = Color.WHITE;
 
+        // ===== Cấu hình thanh cuộn =====
+        // Đặt màu và tạo nút kích thước bằng không để thu gọn thanh cuộn.
+        @Override
+        protected void configureScrollBarColors() {
+            thumbColor = THUMB;
+            trackColor = TRACK;
+        }
+
+        @Override
+        protected JButton createDecreaseButton(int o) {
+            return zeroButton();
+        }
+
+        @Override
+        protected JButton createIncreaseButton(int o) {
+            return zeroButton();
+        }
+
+        private static JButton zeroButton() {
+            JButton b = new JButton();
+            Dimension d = new Dimension(0, 0);
+            b.setPreferredSize(d);
+            return b;
+        }
+
+        // ===== Vẽ thanh cuộn =====
+        // Vẽ phần kéo và rãnh cuộn phù hợp với giao diện sáng.
+        @Override
+        protected void paintThumb(Graphics g, JComponent c, Rectangle r) {
+            if (r.isEmpty())
+                return;
+            Graphics2D g2 = (Graphics2D) g.create();
+            UiUtils.enableAntiAliasing(g2);
+            g2.setColor(THUMB);
+            g2.fillRoundRect(r.x + 2, r.y, r.width - 4, r.height, 6, 6);
+            g2.dispose();
+        }
+
+        @Override
+        protected void paintTrack(Graphics g, JComponent c, Rectangle r) {
+            g.setColor(TRACK);
+            g.fillRect(r.x, r.y, r.width, r.height);
+        }
+    }
+
+    // ===== Khởi tạo và dựng thanh bên =====
+    // Tạo vùng tìm kiếm, danh sách peer/phòng, các mục hiển thị và thanh công cụ.
     public SidebarPanel(SelectionListener listener) {
         this.listener = listener;
         setLayout(new BorderLayout());
@@ -56,7 +109,6 @@ public final class SidebarPanel extends JPanel {
         add(buildBottomToolbar(), BorderLayout.SOUTH);
     }
 
-    // ── Top bar: Tiêu đề + Nút Tạo nhóm + Search box ──────────────
     private JPanel buildTopBar() {
         JPanel top = new JPanel();
         top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
@@ -133,7 +185,6 @@ public final class SidebarPanel extends JPanel {
         return top;
     }
 
-    // ── Vùng cuộn danh sách (Peers + Rooms) ────────────────────────
     private JScrollPane buildScrollableList() {
         JPanel container = new JPanel();
         container.setLayout(new BoxLayout(container, BoxLayout.Y_AXIS));
@@ -178,7 +229,6 @@ public final class SidebarPanel extends JPanel {
         return p;
     }
 
-    // ── Item Peer (Chat 1-1) ──────────────────────────────────────
     private JPanel buildPeerItem(PeerInfo peer) {
         boolean isSelected = peer.equals(selectedItem);
         boolean isOnline = true; // Danh sach nay chi gom cac peer dang ket noi.
@@ -241,7 +291,6 @@ public final class SidebarPanel extends JPanel {
         return item;
     }
 
-    // ── Item Room (Nhóm chat) ─────────────────────────────────────
     private JPanel buildRoomItem(RoomInfo room) {
         boolean isSelected = room.equals(selectedItem);
 
@@ -300,7 +349,6 @@ public final class SidebarPanel extends JPanel {
         return item;
     }
 
-    // ── Bottom Toolbar: Nút Lịch sử & Nút Tạo nhóm ───────────────
     private JPanel buildBottomToolbar() {
         JPanel bar = new JPanel(new GridLayout(1, 2, 8, 0));
         bar.setBackground(UiUtils.C_CARD_BG);
@@ -332,7 +380,17 @@ public final class SidebarPanel extends JPanel {
         return bar;
     }
 
-    // ── Public API ────────────────────────────────────────────────
+    private JLabel buildEmptyHint(String text) {
+        JLabel lbl = new JLabel(text, SwingConstants.CENTER);
+        lbl.setFont(UiUtils.F_SMALL);
+        lbl.setForeground(UiUtils.C_TEXT_HINT);
+        lbl.setBorder(new EmptyBorder(8, 4, 8, 4));
+        lbl.setAlignmentX(CENTER_ALIGNMENT);
+        return lbl;
+    }
+
+    // ===== Cập nhật danh sách và lựa chọn =====
+    // Nhận dữ liệu peer/phòng mới và đồng bộ mục đang được chọn.
     public void setPeers(List<PeerInfo> peers) {
         this.allPeers = new ArrayList<>(peers);
         refreshPeerList(currentFilter());
@@ -343,19 +401,20 @@ public final class SidebarPanel extends JPanel {
         refreshRoomList(currentFilter());
     }
 
-    public void selectRoom(RoomInfo room) {
-        selectedItem = room;
-        refreshPeerList(currentFilter());
-        refreshRoomList(currentFilter());
-    }
-
     public void selectPeer(PeerInfo peer) {
         selectedItem = peer;
         refreshPeerList(currentFilter());
         refreshRoomList(currentFilter());
     }
 
-    // ── Filter logic ──────────────────────────────────────────────
+    public void selectRoom(RoomInfo room) {
+        selectedItem = room;
+        refreshPeerList(currentFilter());
+        refreshRoomList(currentFilter());
+    }
+
+    // ===== Tìm kiếm và làm mới danh sách =====
+    // Đọc từ khóa, lọc peer/phòng và dựng lại các mục phù hợp.
     private String currentFilter() {
         return searchField.getText().trim().toLowerCase();
     }
@@ -395,60 +454,5 @@ public final class SidebarPanel extends JPanel {
             roomListPanel.add(buildEmptyHint("Chưa có nhóm nào"));
         roomListPanel.revalidate();
         roomListPanel.repaint();
-    }
-
-    private JLabel buildEmptyHint(String text) {
-        JLabel lbl = new JLabel(text, SwingConstants.CENTER);
-        lbl.setFont(UiUtils.F_SMALL);
-        lbl.setForeground(UiUtils.C_TEXT_HINT);
-        lbl.setBorder(new EmptyBorder(8, 4, 8, 4));
-        lbl.setAlignmentX(CENTER_ALIGNMENT);
-        return lbl;
-    }
-
-    // ── Thin scroll bar UI cho giao diện sáng ─────────────────────
-    private static final class ThinScrollBarUI extends javax.swing.plaf.basic.BasicScrollBarUI {
-        private static final Color THUMB = new Color(0x94, 0xA3, 0xB8, 140);
-        private static final Color TRACK = Color.WHITE;
-
-        @Override
-        protected void configureScrollBarColors() {
-            thumbColor = THUMB;
-            trackColor = TRACK;
-        }
-
-        @Override
-        protected JButton createDecreaseButton(int o) {
-            return zeroButton();
-        }
-
-        @Override
-        protected JButton createIncreaseButton(int o) {
-            return zeroButton();
-        }
-
-        private static JButton zeroButton() {
-            JButton b = new JButton();
-            Dimension d = new Dimension(0, 0);
-            b.setPreferredSize(d);
-            return b;
-        }
-
-        @Override
-        protected void paintThumb(Graphics g, JComponent c, Rectangle r) {
-            if (r.isEmpty())
-                return;
-            Graphics2D g2 = (Graphics2D) g.create();
-            UiUtils.enableAntiAliasing(g2);
-            g2.setColor(THUMB);
-            g2.fillRoundRect(r.x + 2, r.y, r.width - 4, r.height, 6, 6);
-            g2.dispose();
-        }
-
-        @Override
-        protected void paintTrack(Graphics g, JComponent c, Rectangle r) {
-            g.setColor(TRACK);
-            g.fillRect(r.x, r.y, r.width, r.height);
-        }
     }
 }

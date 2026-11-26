@@ -8,10 +8,13 @@ import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.TargetDataLine;
 
 public final class AudioCapture {
-
+    // ===== Cấu hình và trạng thái =====
+    // Các hằng số và biến được các khối chức năng bên dưới sử dụng.
     // Luồng điều khiển và luồng đọc mic cùng truy cập biến này.
     private volatile TargetDataLine line;
 
+    // ===== Khởi động thu âm =====
+    // Mở microphone theo AudioConfig và tạo luồng đọc âm thanh riêng.
     public synchronized void start(Consumer<byte[]> onAudio)
             throws LineUnavailableException {
 
@@ -44,6 +47,8 @@ public final class AudioCapture {
         }
     }
 
+    // ===== Đọc PCM từ microphone =====
+    // Ghép dữ liệu thành từng khối đủ 20 ms rồi chuyển bản sao cho callback.
     private void readLoop(
             TargetDataLine input,
             Consumer<byte[]> onAudio) {
@@ -80,15 +85,8 @@ public final class AudioCapture {
         }
     }
 
-    private synchronized void release(TargetDataLine input) {
-        // Luồng cũ không được xóa trạng thái của phiên thu mới.
-        if (line == input) {
-            line = null;
-        }
-
-        input.close();
-    }
-
+    // ===== Dừng và giải phóng microphone =====
+    // Dừng phiên thu và bảo đảm luồng cũ không xóa trạng thái của phiên mới.
     public synchronized void stop() {
         TargetDataLine input = line;
         line = null;
@@ -97,5 +95,14 @@ public final class AudioCapture {
             input.stop();
             input.close();
         }
+    }
+
+    private synchronized void release(TargetDataLine input) {
+        // Luồng cũ không được xóa trạng thái của phiên thu mới.
+        if (line == input) {
+            line = null;
+        }
+
+        input.close();
     }
 }

@@ -14,10 +14,11 @@ import javax.swing.*;
 
 /** Quản lý các màn hình chat, lịch sử và cuộc gọi; không gửi yêu cầu mạng. */
 final class ChatContentPanel extends JPanel {
+    // ===== Cấu hình và trạng thái =====
+    // Các hằng số và biến được các khối chức năng bên dưới sử dụng.
     private static final String WELCOME = "WELCOME";
     private static final String HISTORY = "HISTORY";
     private static final String CALL = "CALL";
-
     private final CardLayout cards = new CardLayout();
     private final WelcomePanel welcome;
     private final HistoryPanel history = new HistoryPanel();
@@ -28,13 +29,14 @@ final class ChatContentPanel extends JPanel {
     private final List<ChatMessage> chatHistory = new ArrayList<>();
     private final JButton older = smallButton("Cũ hơn");
     private final JButton newer = smallButton("Mới hơn");
-
     private RoomInfo activeRoom;
     private boolean viewingHistory;
     private List<Line> shownLines;
     private List<PeerInfo> shownMembers;
     private final Set<String> onlinePeers = new HashSet<>();
 
+    // ===== Khởi tạo các màn hình nội dung =====
+    // Tạo các thẻ CardLayout cho màn chào, lịch sử, cuộc gọi và nút phân trang.
     ChatContentPanel(String username, String localUserId, boolean groupMode,
             CallPanel.CallListener callListener,
             Runnable olderPage, Runnable newerPage) {
@@ -67,13 +69,8 @@ final class ChatContentPanel extends JPanel {
                 text, UiUtils.C_PRIMARY_LIGHT, UiUtils.C_PRIMARY, UiUtils.ARC_SM);
     }
 
-    private void resetSelection(RoomInfo room, boolean historySelected) {
-        activeRoom = room;
-        viewingHistory = historySelected;
-        shownLines = null;
-        shownMembers = null;
-    }
-
+    // ===== Điều hướng giữa các cuộc trò chuyện =====
+    // Tạo khung chat khi cần, đổi thẻ đang hiển thị và đặt lại dữ liệu lựa chọn.
     void showPeer(PeerInfo peer, DirectChatPanel.ActionCallback callback) {
         resetSelection(null, false);
         ensurePeer(peer, callback);
@@ -121,6 +118,15 @@ final class ChatContentPanel extends JPanel {
         cards.show(this, HISTORY);
     }
 
+    private void resetSelection(RoomInfo room, boolean historySelected) {
+        activeRoom = room;
+        viewingHistory = historySelected;
+        shownLines = null;
+        shownMembers = null;
+    }
+
+    // ===== Cập nhật dữ liệu chat nhóm =====
+    // Đổ thành viên/lịch sử từ View vào phòng đang chọn và khôi phục bản nháp khi gửi lỗi.
     void renderGroupView(View view, int page) {
         welcome.setUsername(view.username());
         if (viewingHistory) {
@@ -172,11 +178,8 @@ final class ChatContentPanel extends JPanel {
         }
     }
 
-    void setDirectSending(String peerId, boolean sending) {
-        DirectChatPanel panel = directChats.get(peerId);
-        if (panel != null) panel.setSending(sending);
-    }
-
+    // ===== Cập nhật dữ liệu chat trực tiếp =====
+    // Nạp lịch sử, phục hồi tin gửi lỗi và bật/tắt gửi theo trạng thái kết nối.
     void loadDirectHistory(String peerId, List<ChatMessage> messages) {
         String key = "dm_" + peerId;
 
@@ -202,6 +205,11 @@ final class ChatContentPanel extends JPanel {
         }
     }
 
+    void setDirectSending(String peerId, boolean sending) {
+        DirectChatPanel panel = directChats.get(peerId);
+        if (panel != null) panel.setSending(sending);
+    }
+
     void restoreDirectDraft(String peerId, String text) {
         DirectChatPanel panel = directChats.get(peerId);
         if (panel != null) {
@@ -209,6 +217,16 @@ final class ChatContentPanel extends JPanel {
         }
     }
 
+    void setConnectedPeers(List<PeerInfo> peers) {
+        onlinePeers.clear();
+        for (PeerInfo peer : peers) {
+            onlinePeers.add(peer.id());
+        }
+        directChats.forEach((id, panel) -> panel.setConnected(onlinePeers.contains(id)));
+    }
+
+    // ===== Phân phối tin nhắn để hiển thị =====
+    // Lưu tin vào lịch sử của phiên và thêm vào đúng khung chat trực tiếp hoặc nhóm.
     void appendMessage(ChatMessage message) {
         chatHistory.add(message);
         String roomId = message.roomId();
@@ -225,14 +243,8 @@ final class ChatContentPanel extends JPanel {
         }
     }
 
-    void setConnectedPeers(List<PeerInfo> peers) {
-        onlinePeers.clear();
-        for (PeerInfo peer : peers) {
-            onlinePeers.add(peer.id());
-        }
-        directChats.forEach((id, panel) -> panel.setConnected(onlinePeers.contains(id)));
-    }
-
+    // ===== Chuyển màn hình cuộc gọi =====
+    // Cung cấp CallPanel, mở màn gọi và quay về hội thoại sau cuộc gọi.
     CallPanel callPanel() {
         return call;
     }

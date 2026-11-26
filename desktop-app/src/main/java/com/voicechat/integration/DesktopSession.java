@@ -19,11 +19,15 @@ import javax.swing.SwingUtilities;
 
 /** Khoi tao mot phien desktop tu LoginFrame; duoc goi tren EDT. */
 public final class DesktopSession implements AutoCloseable {
+    // ===== Cấu hình và trạng thái =====
+    // Các hằng số và biến được các khối chức năng bên dưới sử dụng.
     private final PeerManager network;
     private final AppCoordinator app;
     private final ChatFrame frame;
     private boolean closed;
 
+    // ===== Khởi tạo phiên desktop =====
+    // Ghép lịch sử, mạng, âm thanh và cửa sổ chat; gắn xử lý đóng cửa sổ.
     public DesktopSession(String username) {
         requireEdt();
         if (Objects.requireNonNull(username).isBlank()) {
@@ -44,6 +48,8 @@ public final class DesktopSession implements AutoCloseable {
         });
     }
 
+    // ===== Mở phiên P2P =====
+    // Mở cổng TCP/UDP, tùy chọn kết nối peer rồi hiển thị cửa sổ khi sẵn sàng.
     public void open(int localTcpPort, int localUdpPort, boolean waitForPeer,
             String peerHost, int peerTcpPort,
             Runnable onReady, Consumer<Exception> onFailure) {
@@ -72,6 +78,8 @@ public final class DesktopSession implements AutoCloseable {
         });
     }
 
+    // ===== Chuẩn bị kho lịch sử theo hồ sơ =====
+    // Tạo tệp SQLite riêng dưới thư mục .voicechat/direct bằng UUID từ tên người dùng.
     private static HistoryRepository directHistory(String username) {
         try {
             Path directory = Path.of(
@@ -94,6 +102,8 @@ public final class DesktopSession implements AutoCloseable {
         }
     }
 
+    // ===== Đóng phiên và kiểm tra luồng Swing =====
+    // Thu hồi cửa sổ/dịch vụ; yêu cầu các thao tác phiên chạy trên EDT.
     @Override
     public void close() {
         requireEdt();

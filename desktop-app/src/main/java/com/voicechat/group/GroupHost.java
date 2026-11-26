@@ -11,12 +11,16 @@ import java.util.*;
 import static com.voicechat.group.GroupProtocol.*;
 
 public final class GroupHost {
+    // ===== Cấu hình và trạng thái =====
+    // Các hằng số và biến được các khối chức năng bên dưới sử dụng.
     private final UserManager users;
     private final RoomManager rooms;
     private final HistoryRepository history;
     private final DatabaseManager db;
     private final NetworkGateway wire;
 
+    // ===== Khởi tạo và chạy máy chủ =====
+    // Ghép tầng mạng với các kho dữ liệu, đăng ký callback rồi mở cổng nghe.
     public GroupHost(NetworkGateway wire, DatabaseManager db) {
         this.wire = wire;
         this.db = db;
@@ -25,6 +29,18 @@ public final class GroupHost {
         history = new HistoryRepository(db);
     }
 
+    public static void main(String[] args) throws Exception {
+        int port = args.length == 0 ? 5000 : Integer.parseInt(args[0]);
+        var wire = new PeerManager(HOST);
+        var host = new GroupHost(wire,new DatabaseManager());
+        wire.onControlMessage(host::receive);
+        Runtime.getRuntime().addShutdownHook(new Thread(wire::disconnect));
+        System.out.println("Máy chủ phòng chat đang nghe TCP " + wire.startListening(port,0));
+        new java.util.concurrent.CountDownLatch(1).await();
+    }
+
+    // ===== Nhận yêu cầu và trả phản hồi =====
+    // Giải mã request, kiểm tra ID/loại thao tác và gửi Reply về đúng client.
     public synchronized void receive(ControlMessage m) {
         if (!HOST.equals(m.targetId()) || m.senderId() == null) return;
         String requestId = "";
@@ -41,6 +57,8 @@ public final class GroupHost {
         } catch (IOException e) { System.err.println("Không gửi được phản hồi: " + e.getMessage()); }
     }
 
+    // ===== Xử lý nghiệp vụ phòng chat =====
+    // Kiểm tra đăng nhập/thành viên, thực hiện thao tác và tạo View chứa phòng, thành viên, lịch sử.
     private View apply(String id,String room,Request q) {
         String username = db.transaction(c -> DatabaseManager.query(c,
                 "SELECT username FROM users WHERE id=?",r -> r.getString(1),id).stream().findFirst().orElse(null));
@@ -74,14 +92,5 @@ public final class GroupHost {
 
     private boolean isMember(String room,String id) {
         return rooms.getMembers(room).stream().anyMatch(p -> p.id().equals(id));
-    }
-    public static void main(String[] args) throws Exception {
-        int port = args.length == 0 ? 5000 : Integer.parseInt(args[0]);
-        var wire = new PeerManager(HOST);
-        var host = new GroupHost(wire,new DatabaseManager());
-        wire.onControlMessage(host::receive);
-        Runtime.getRuntime().addShutdownHook(new Thread(wire::disconnect));
-        System.out.println("Máy chủ phòng chat đang nghe TCP " + wire.startListening(port,0));
-        new java.util.concurrent.CountDownLatch(1).await();
     }
 }

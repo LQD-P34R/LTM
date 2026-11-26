@@ -11,13 +11,8 @@ import javax.swing.border.EmptyBorder;
  * và các Swing Components tự vẽ bằng Graphics2D có khử răng cưa (Anti-Aliasing).
  */
 public final class UiUtils {
-
-    private UiUtils() { /* utility class */ }
-
-    // =========================================================================
-    // 1. DESIGN TOKENS (BẢNG MÀU & THIẾT KẾ VOICELINK)
-    // =========================================================================
-
+    // ===== Cấu hình và trạng thái =====
+    // Các hằng số và biến được các khối chức năng bên dưới sử dụng.
     // --- Bảng màu nền (Background Colors) ---
     /** Nền ứng dụng dịu mắt, phong cách hiện đại (Slate-50) */
     public static final Color C_APP_BG          = new Color(0xF8, 0xFA, 0xFC);
@@ -29,13 +24,11 @@ public final class UiUtils {
     public static final Color C_HOVER_BG        = new Color(0xF1, 0xF5, 0xF9);
     /** Nền mục đang được chọn (Selected pastel blue) */
     public static final Color C_SELECTED_BG     = new Color(0xEB, 0xF3, 0xFF);
-
     // --- Bảng màu viền (Borders) ---
     /** Viền mảnh tinh tế 1px (Slate-200) */
     public static final Color C_BORDER          = new Color(0xE2, 0xE8, 0xF0);
     /** Viền khi ô nhập liệu được Active/Focus */
     public static final Color C_BORDER_FOCUS    = new Color(0x0B, 0x63, 0xE5);
-
     // --- Bảng màu nhấn chủ đạo (Primary Accent) ---
     /** Màu xanh chủ đạo VoiceLink (Primary Blue) */
     public static final Color C_PRIMARY         = new Color(0x0B, 0x63, 0xE5);
@@ -45,7 +38,6 @@ public final class UiUtils {
     public static final Color C_PRIMARY_LIGHT   = new Color(0xEB, 0xF3, 0xFF);
     /** Màu xanh đậm cho banner chào mừng / Login Hero */
     public static final Color C_PRIMARY_HERO    = new Color(0x13, 0x51, 0xB4);
-
     // --- Bảng màu trạng thái (Status Colors) ---
     /** Xanh lá: Online / Đang nói / Gọi thoại */
     public static final Color C_ONLINE          = new Color(0x22, 0xC5, 0x5E);
@@ -57,7 +49,6 @@ public final class UiUtils {
     public static final Color C_DANGER_HOVER    = new Color(0xDC, 0x26, 0x26);
     /** Vàng cam: Cảnh báo / Tắt mic (Mute) */
     public static final Color C_WARNING         = new Color(0xF5, 0x9E, 0x0B);
-
     // --- Bảng màu chữ (Typography Colors) ---
     /** Chữ chính: Đậm, rõ ràng, tương phản cao (Slate-900) */
     public static final Color C_TEXT_PRIMARY    = new Color(0x0F, 0x17, 0x2A);
@@ -67,16 +58,13 @@ public final class UiUtils {
     public static final Color C_TEXT_HINT       = new Color(0x94, 0xA3, 0xB8);
     /** Chữ trắng trên nền tối / nút nhấn */
     public static final Color C_TEXT_LIGHT      = Color.WHITE;
-
     // --- Bong bóng tin nhắn (Chat Bubbles) ---
     public static final Color C_BUBBLE_INCOMING = new Color(0xF1, 0xF5, 0xF9);
     public static final Color C_BUBBLE_OUTGOING = new Color(0x0B, 0x63, 0xE5);
-
     // --- Màu Call Dark Mode (Cuộc gọi toàn cảnh) ---
     public static final Color C_CALL_DARK_BG    = new Color(0x0F, 0x17, 0x2A);
     public static final Color C_CALL_CTRL_BG    = new Color(0x1E, 0x29, 0x3B);
     public static final Color C_CALL_CTRL_HOV   = new Color(0x33, 0x41, 0x55);
-
     // --- Bảng màu Avatar Pastel rực rỡ ---
     public static final Color[] AVATAR_PALETTE = {
         new Color(0x63, 0x66, 0xF1), // Tím Indigo (Minh Anh)
@@ -88,13 +76,11 @@ public final class UiUtils {
         new Color(0x0D, 0x94, 0x88), // Xanh Teal (Đức Anh)
         new Color(0x7C, 0x3A, 0xED), // Tím Violet (Lan Phương)
     };
-
     // --- Độ bo góc chuẩn (Arc Radii) ---
     public static final int ARC_SM = 10; // Nút bấm phẳng, pill nhỏ
     public static final int ARC_MD = 14; // Input textfield, thẻ danh sách
     public static final int ARC_LG = 18; // Khung Card chính, container
     public static final int ARC_XL = 24; // Floating dock, pill search
-
     // --- Phông chữ chuẩn hiện đại (Segoe UI fallback SansSerif) ---
     public static final Font F_TITLE_XL  = new Font("Segoe UI", Font.BOLD,  22);
     public static final Font F_TITLE_LG  = new Font("Segoe UI", Font.BOLD,  18);
@@ -105,10 +91,12 @@ public final class UiUtils {
     public static final Font F_SMALL_BOLD= new Font("Segoe UI", Font.BOLD,  11);
     public static final Font F_BTN       = new Font("Segoe UI", Font.BOLD,  13);
 
-    // =========================================================================
-    // 2. HELPER METHODS
-    // =========================================================================
+    // ===== Khởi tạo lớp tiện ích giao diện =====
+    // Constructor riêng vì các hàm/hằng số dùng chung đều là static.
+    private UiUtils() { /* utility class */ }
 
+    // ===== Tạo thông tin avatar =====
+    // Chọn màu ổn định từ tên, lấy chữ viết tắt và tạo avatar tương thích với nơi gọi cũ.
     /** Trả về màu avatar ổn định dựa trên mã băm của tên. */
     public static Color avatarColorFor(String name) {
         if (name == null || name.isEmpty()) return AVATAR_PALETTE[0];
@@ -135,6 +123,15 @@ public final class UiUtils {
     }
 
     /**
+     * Tương thích ngược với các file hiện tại đang gọi buildAvatarCircle.
+     */
+    public static JPanel buildAvatarCircle(String name, int size, boolean isGroup) {
+        return new AvatarBadge(name, size, isGroup, false, false);
+    }
+
+    // ===== Thiết lập chất lượng vẽ =====
+    // Bật khử răng cưa cho các thành phần dùng Graphics2D.
+    /**
      * Bật Anti-Aliasing mượt mà cho Graphics2D.
      */
     public static void enableAntiAliasing(Graphics2D g2) {
@@ -143,28 +140,23 @@ public final class UiUtils {
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
     }
 
-    /**
-     * Tương thích ngược với các file hiện tại đang gọi buildAvatarCircle.
-     */
-    public static JPanel buildAvatarCircle(String name, int size, boolean isGroup) {
-        return new AvatarBadge(name, size, isGroup, false, false);
-    }
-
-    // =========================================================================
-    // 3. CUSTOM SWING COMPONENTS (VẼ BẰNG GRAPHICS2D)
-    // =========================================================================
-
+    // ===== Các thành phần Swing dùng chung =====
+    // Các lớp bên dưới tái sử dụng bảng màu và hàm vẽ để tạo panel, nút, ô nhập và avatar.
     /**
      * Khung bo góc mềm mại loại bỏ hoàn toàn viền Swing mặc định,
      * hỗ trợ nền phẳng, viền mảnh 1px tinh tế và hiệu ứng đổ bóng nhẹ (drop shadow).
      */
     public static class RoundedPanel extends JPanel {
+        // ===== Cấu hình và trạng thái =====
+        // Các hằng số và biến được các khối chức năng bên dưới sử dụng.
         private int arc = ARC_LG;
         private Color backgroundColor = C_CARD_BG;
         private Color borderColor = C_BORDER;
         private float borderWidth = 1f;
         private boolean drawShadow = false;
 
+        // ===== Khởi tạo thành phần =====
+        // Các constructor dùng chung cấu hình để thiết lập kích thước, màu sắc và sự kiện.
         public RoundedPanel() {
             this(ARC_LG, C_CARD_BG, C_BORDER, false);
         }
@@ -200,6 +192,8 @@ public final class UiUtils {
             setBorder(null);
         }
 
+        // ===== Cập nhật thuộc tính hiển thị =====
+        // Đổi thuộc tính của thành phần và yêu cầu Swing vẽ lại khi cần.
         public void setBackgroundColor(Color bg) {
             this.backgroundColor = bg;
             repaint();
@@ -220,6 +214,8 @@ public final class UiUtils {
             repaint();
         }
 
+        // ===== Vẽ thành phần tùy biến =====
+        // Dùng Graphics2D để vẽ hình dạng và màu sắc theo trạng thái hiện tại.
         @Override
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
@@ -261,6 +257,8 @@ public final class UiUtils {
      * Nút phẳng hiện đại: bo góc, tắt viền focus, tự đổi màu mượt mà khi hover và nhấn.
      */
     public static class RoundedButton extends JButton {
+        // ===== Cấu hình và trạng thái =====
+        // Các hằng số và biến được các khối chức năng bên dưới sử dụng.
         private int arc = ARC_SM;
         private Color normalBg = C_PRIMARY;
         private Color hoverBg = C_PRIMARY_HOVER;
@@ -271,6 +269,8 @@ public final class UiUtils {
         private boolean isHovered = false;
         private boolean isPressed = false;
 
+        // ===== Khởi tạo thành phần =====
+        // Các constructor dùng chung cấu hình để thiết lập kích thước, màu sắc và sự kiện.
         public RoundedButton(String text) {
             this(text, C_PRIMARY, C_TEXT_LIGHT, ARC_SM);
         }
@@ -332,6 +332,8 @@ public final class UiUtils {
             });
         }
 
+        // ===== Cập nhật thuộc tính hiển thị =====
+        // Đổi thuộc tính của thành phần và yêu cầu Swing vẽ lại khi cần.
         public void setCustomColors(Color bg, Color hover, Color fg) {
             this.normalBg = bg;
             this.hoverBg = hover;
@@ -347,6 +349,8 @@ public final class UiUtils {
             repaint();
         }
 
+        // ===== Vẽ thành phần tùy biến =====
+        // Dùng Graphics2D để vẽ hình dạng và màu sắc theo trạng thái hiện tại.
         private static Color calculateHoverColor(Color base) {
             // Nếu màu trắng hoặc rất sáng thì tối đi một chút
             if (base.getRed() > 230 && base.getGreen() > 230 && base.getBlue() > 230) {
@@ -405,6 +409,8 @@ public final class UiUtils {
      * tự hiển thị placeholder màu nhạt và tự đổi màu viền sang xanh chủ đạo khi focus.
      */
     public static class RoundedTextField extends JTextField {
+        // ===== Cấu hình và trạng thái =====
+        // Các hằng số và biến được các khối chức năng bên dưới sử dụng.
         private int arc = ARC_MD;
         private Color normalBorder = C_BORDER;
         private Color focusBorder = C_BORDER_FOCUS;
@@ -413,6 +419,8 @@ public final class UiUtils {
         private String placeholder = "";
         private boolean isFocused = false;
 
+        // ===== Khởi tạo thành phần =====
+        // Các constructor dùng chung cấu hình để thiết lập kích thước, màu sắc và sự kiện.
         public RoundedTextField(String placeholder) {
             this(placeholder, ARC_MD, C_CARD_BG);
         }
@@ -448,6 +456,8 @@ public final class UiUtils {
             });
         }
 
+        // ===== Cập nhật thuộc tính hiển thị =====
+        // Đổi thuộc tính của thành phần và yêu cầu Swing vẽ lại khi cần.
         public void setPlaceholder(String placeholder) {
             this.placeholder = placeholder;
             repaint();
@@ -463,6 +473,8 @@ public final class UiUtils {
             repaint();
         }
 
+        // ===== Vẽ thành phần tùy biến =====
+        // Dùng Graphics2D để vẽ hình dạng và màu sắc theo trạng thái hiện tại.
         @Override
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
@@ -509,6 +521,8 @@ public final class UiUtils {
      * Ô nhập mật khẩu bo góc mềm mại, kế thừa từ JPasswordField.
      */
     public static class RoundedPasswordField extends JPasswordField {
+        // ===== Cấu hình và trạng thái =====
+        // Các hằng số và biến được các khối chức năng bên dưới sử dụng.
         private int arc = ARC_MD;
         private Color normalBorder = C_BORDER;
         private Color focusBorder = C_BORDER_FOCUS;
@@ -517,6 +531,8 @@ public final class UiUtils {
         private String placeholder = "";
         private boolean isFocused = false;
 
+        // ===== Khởi tạo thành phần =====
+        // Các constructor dùng chung cấu hình để thiết lập kích thước, màu sắc và sự kiện.
         public RoundedPasswordField(String placeholder) {
             this(placeholder, ARC_MD, C_CARD_BG);
         }
@@ -548,11 +564,15 @@ public final class UiUtils {
             });
         }
 
+        // ===== Cập nhật thuộc tính hiển thị =====
+        // Đổi thuộc tính của thành phần và yêu cầu Swing vẽ lại khi cần.
         public void setPlaceholder(String placeholder) {
             this.placeholder = placeholder;
             repaint();
         }
 
+        // ===== Vẽ thành phần tùy biến =====
+        // Dùng Graphics2D để vẽ hình dạng và màu sắc theo trạng thái hiện tại.
         @Override
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
@@ -598,6 +618,8 @@ public final class UiUtils {
      * Hỗ trợ hiệu ứng phát sáng gợn sóng khi thành viên đang nói (isSpeaking).
      */
     public static class AvatarBadge extends JPanel {
+        // ===== Cấu hình và trạng thái =====
+        // Các hằng số và biến được các khối chức năng bên dưới sử dụng.
         private String name = "";
         private int size = 40;
         private boolean isGroup = false;
@@ -605,6 +627,8 @@ public final class UiUtils {
         private boolean showStatusBadge = true;
         private boolean isSpeaking = false;
 
+        // ===== Khởi tạo thành phần =====
+        // Các constructor dùng chung cấu hình để thiết lập kích thước, màu sắc và sự kiện.
         public AvatarBadge(String name, int size) {
             this(name, size, false, false, false);
         }
@@ -633,6 +657,8 @@ public final class UiUtils {
             revalidate();
         }
 
+        // ===== Cập nhật thuộc tính hiển thị =====
+        // Đổi thuộc tính của thành phần và yêu cầu Swing vẽ lại khi cần.
         public void setOnline(boolean online) {
             this.isOnline = online;
             repaint();
@@ -651,6 +677,8 @@ public final class UiUtils {
             repaint();
         }
 
+        // ===== Vẽ thành phần tùy biến =====
+        // Dùng Graphics2D để vẽ hình dạng và màu sắc theo trạng thái hiện tại.
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);

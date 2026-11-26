@@ -5,18 +5,20 @@ import java.util.concurrent.TimeUnit;
 
 /** Bo dem co dinh cho PCM 20 ms; nhan va lay du lieu o hai luong khac nhau. */
 public final class JitterBuffer {
+    // ===== Cấu hình và trạng thái =====
+    // Các hằng số và biến được các khối chức năng bên dưới sử dụng.
     private static final long FRAME_NS =
             TimeUnit.MILLISECONDS.toNanos(AudioConfig.CHUNK_MS);
     private static final long PREFILL_NS = 3 * FRAME_NS;
     private static final int MAX_PACKETS = 50;
-
     private final TreeMap<Long, byte[]> packets = new TreeMap<>();
-
     private long nextSequence = -1;
     private long minimumSequence;
     private long nextPlayNanos;
     private boolean playing;
 
+    // ===== Nhận và sắp xếp gói âm thanh =====
+    // Lưu PCM theo sequence, loại gói quá hạn/trùng và giới hạn lượng dữ liệu chờ.
     public synchronized void offer(long sequence, byte[] pcm, long nowNanos) {
         if (sequence < minimumSequence || pcm == null
                 || pcm.length != AudioConfig.CHUNK_BYTES) {
@@ -58,6 +60,8 @@ public final class JitterBuffer {
         }
     }
 
+    // ===== Lấy PCM theo nhịp phát =====
+    // Đệm ban đầu 60 ms, sau đó lấy mỗi khối 20 ms; thay gói thiếu bằng im lặng.
     /** null = chua den han; khoi 0 = da den han nhung thieu goi. */
     public synchronized byte[] poll(long nowNanos) {
         if (nextSequence == -1 || nowNanos - nextPlayNanos < 0) {

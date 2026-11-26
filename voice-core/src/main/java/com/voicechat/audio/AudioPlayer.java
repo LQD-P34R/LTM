@@ -9,12 +9,14 @@ import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.SourceDataLine;
 
 public final class AudioPlayer {
-
+    // ===== Cấu hình và trạng thái =====
+    // Các hằng số và biến được các khối chức năng bên dưới sử dụng.
     private static final int MAX_CHUNKS = 5;
-
     private volatile SourceDataLine line;
     private ArrayBlockingQueue<byte[]> queue;
 
+    // ===== Khởi động phát âm thanh =====
+    // Mở loa và tạo hàng đợi riêng cho mỗi phiên phát.
     public synchronized void start() throws LineUnavailableException {
         if (line != null) {
             throw new IllegalStateException("Loa đang hoạt động");
@@ -48,6 +50,8 @@ public final class AudioPlayer {
         }
     }
 
+    // ===== Nhận và phát các khối PCM =====
+    // Xếp khối âm thanh vào hàng đợi có giới hạn rồi ghi ra loa trên luồng riêng.
     public synchronized void enqueue(byte[] pcm) {
         Objects.requireNonNull(pcm, "pcm không được null");
 
@@ -110,16 +114,8 @@ public final class AudioPlayer {
         }
     }
 
-    private synchronized void release(SourceDataLine output) {
-        // Luồng cũ không được xóa trạng thái của phiên phát mới.
-        if (line == output) {
-            line = null;
-            queue = null;
-        }
-
-        output.close();
-    }
-
+    // ===== Dừng và giải phóng loa =====
+    // Xóa hàng đợi, đóng thiết bị và giữ an toàn khi phiên phát đã thay đổi.
     public synchronized void stop() {
         SourceDataLine output = line;
         line = null;
@@ -134,5 +130,15 @@ public final class AudioPlayer {
             output.flush();
             output.close();
         }
+    }
+
+    private synchronized void release(SourceDataLine output) {
+        // Luồng cũ không được xóa trạng thái của phiên phát mới.
+        if (line == output) {
+            line = null;
+            queue = null;
+        }
+
+        output.close();
     }
 }

@@ -6,8 +6,12 @@ import javax.swing.border.EmptyBorder;
 
 /** Hộp thoại chỉ thu nhận tên nhóm; bên gọi thực hiện tạo phòng. */
 final class CreateGroupDialog extends JDialog {
+    // ===== Cấu hình và trạng thái =====
+    // Các hằng số và biến được các khối chức năng bên dưới sử dụng.
     private String roomName;
 
+    // ===== Dựng hộp thoại nhập tên nhóm =====
+    // Tạo ô tên và các nút xác nhận/hủy; lưu lựa chọn của người dùng.
     private CreateGroupDialog(JFrame owner) {
         super(owner, "Tạo nhóm mới", true);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
@@ -60,6 +64,8 @@ final class CreateGroupDialog extends JDialog {
         setContentPane(card);
     }
 
+    // ===== Mở hộp thoại và trả kết quả =====
+    // Hiển thị hộp thoại modal rồi trả tên nhóm hoặc null khi hủy.
     static String showDialog(JFrame owner) {
         CreateGroupDialog dialog = new CreateGroupDialog(owner);
         dialog.setVisible(true);

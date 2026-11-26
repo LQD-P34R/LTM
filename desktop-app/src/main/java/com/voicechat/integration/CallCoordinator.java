@@ -25,7 +25,12 @@ import javax.swing.SwingUtilities;
  * Dieu phoi mot cuoc goi. Tat ca trang thai chi doi tren luong call-control.
  */
 public final class CallCoordinator implements AutoCloseable {
+    // ===== Dữ liệu và các kiểu hỗ trợ =====
+    // Các trường lưu cấu hình/trạng thái; các kiểu lồng nhau mô tả dữ liệu và hợp đồng dùng trong lớp.
     public interface View {
+
+        // ===== Thông báo trạng thái cuộc gọi =====
+        // Bộ điều phối gọi các hàm này qua Executor giao diện để hiển thị các giai đoạn và trạng thái mute.
         void outgoing(PeerInfo peer);
 
         void incoming(PeerInfo peer, String callId);
@@ -36,33 +41,38 @@ public final class CallCoordinator implements AutoCloseable {
 
         void muted(boolean muted);
 
+        // ===== Thông báo lỗi và danh bạ =====
+        // Cập nhật lỗi cuộc gọi và danh sách các peer có thể liên lạc.
         void error(String message);
 
         void setPeers(List<PeerInfo> peers);
     }
-
     @FunctionalInterface
     public interface ConnectionAction {
+
+        // ===== Thao tác mở kết nối =====
+        // Bên gọi cung cấp thao tác mạng có thể phát sinh IOException; coordinator thực thi trên luồng điều khiển.
         void run() throws IOException;
     }
-
     private enum Phase {
         OUTGOING, INCOMING, ACTIVE
     }
-
     private static final class Call {
+        // ===== Cấu hình và trạng thái =====
+        // Các hằng số và biến được các khối chức năng bên dưới sử dụng.
         final String id;
         final PeerInfo peer;
         Phase phase;
         ScheduledFuture<?> timeout;
 
+        // ===== Khởi tạo trạng thái phiên gọi =====
+        // Lưu ID cuộc gọi, peer đối diện và giai đoạn ban đầu để đối chiếu tín hiệu nhận về.
         Call(String id, PeerInfo peer, Phase phase) {
             this.id = id;
             this.peer = peer;
             this.phase = phase;
         }
     }
-
     private final NetworkGateway network;
     private final VoiceGateway voice;
     private final String localId;
@@ -77,6 +87,8 @@ public final class CallCoordinator implements AutoCloseable {
     private volatile Consumer<ControlMessage> chatHandler = message -> {
     };
 
+    // ===== Khởi tạo điều phối cuộc gọi =====
+    // Nhận các dịch vụ và callback; trạng thái cuộc gọi được xử lý tuần tự trên call-control.
     public CallCoordinator(NetworkGateway network, VoiceGateway voice,
             String localId, View view) {
         this(network, voice, localId, view,
@@ -106,6 +118,8 @@ public final class CallCoordinator implements AutoCloseable {
         }));
     }
 
+    // ===== Mở kết nối và cập nhật danh bạ =====
+    // Chạy thao tác kết nối, tạo PeerInfo và thông báo danh sách peer cho giao diện.
     public void open(ConnectionAction connect) {
         open(connect, () -> {
         }, error -> view.error(
@@ -132,6 +146,18 @@ public final class CallCoordinator implements AutoCloseable {
         });
     }
 
+    private void refreshPeers() {
+        List<PeerInfo> peers = network.connectedPeerIds().stream()
+                .sorted().map(CallCoordinator::peer).toList();
+        notifyUi(() -> view.setPeers(peers));
+    }
+
+    private static PeerInfo peer(String id) {
+        return new PeerInfo(id, id, "", 0, 0);
+    }
+
+    // ===== Thao tác gọi từ người dùng =====
+    // Gửi yêu cầu gọi, chấp nhận/từ chối, kết thúc hoặc đổi trạng thái microphone.
     public void requestCall(PeerInfo peer) {
         submit(() -> {
             if (call != null) {
@@ -199,6 +225,8 @@ public final class CallCoordinator implements AutoCloseable {
         });
     }
 
+    // ===== Nhận và gửi tín hiệu cuộc gọi =====
+    // Kiểm tra người gửi, người nhận và ID phiên để bỏ qua tín hiệu cũ; có thể chuyển CHAT cho handler.
     public void receiveControlMessage(ControlMessage message) {
         submit(() -> receive(message));
     }
@@ -268,6 +296,25 @@ public final class CallCoordinator implements AutoCloseable {
                 && call.peer.id().equals(message.senderId());
     }
 
+    private void send(Call target, ControlMessage.Type type) throws IOException {
+        network.sendControl(target.peer.id(), new ControlMessage(type, localId,
+                target.peer.id(), null, target.id, Instant.now()));
+    }
+
+    private void sendQuietly(Call target, ControlMessage.Type type) {
+        try {
+            send(target, type);
+        } catch (IOException | RuntimeException e) {
+            System.err.println("Call control: " + e);
+        }
+    }
+
+    public void onChatMessage(Consumer<ControlMessage> handler) {
+        chatHandler = Objects.requireNonNull(handler);
+    }
+
+    // ===== Chuyển trạng thái và hết thời gian chờ =====
+    // Kích hoạt cuộc gọi, hủy lịch chờ, dừng âm thanh và thông báo lỗi/kết thúc.
     private void activate(Call active) {
         active.phase = Phase.ACTIVE;
         if (active.timeout != null)
@@ -303,36 +350,8 @@ public final class CallCoordinator implements AutoCloseable {
         notifyUi(() -> view.error(message + ": " + error.getMessage()));
     }
 
-    private void send(Call target, ControlMessage.Type type) throws IOException {
-        network.sendControl(target.peer.id(), new ControlMessage(type, localId,
-                target.peer.id(), null, target.id, Instant.now()));
-    }
-
-    private void sendQuietly(Call target, ControlMessage.Type type) {
-        try {
-            send(target, type);
-        } catch (IOException | RuntimeException e) {
-            System.err.println("Call control: " + e);
-        }
-    }
-
-    private static PeerInfo peer(String id) {
-        return new PeerInfo(id, id, "", 0, 0);
-    }
-
-    private void refreshPeers() {
-        List<PeerInfo> peers = network.connectedPeerIds().stream()
-                .sorted().map(CallCoordinator::peer).toList();
-        notifyUi(() -> view.setPeers(peers));
-    }
-
-    private void notifyUi(Runnable action) {
-        ui.execute(() -> {
-            if (!closing.get())
-                action.run();
-        });
-    }
-
+    // ===== Điều phối tác vụ và cập nhật giao diện =====
+    // Xếp thao tác trên luồng điều khiển; gửi cập nhật qua Executor giao diện được cung cấp.
     private void submit(Runnable action) {
         if (closing.get())
             return;
@@ -351,6 +370,15 @@ public final class CallCoordinator implements AutoCloseable {
         }
     }
 
+    private void notifyUi(Runnable action) {
+        ui.execute(() -> {
+            if (!closing.get())
+                action.run();
+        });
+    }
+
+    // ===== Đóng bộ điều phối =====
+    // Báo kết thúc phiên còn hoạt động, ngắt mạng và hoàn tất future đóng.
     public CompletableFuture<Void> closeAsync() {
         if (closing.compareAndSet(false, true)) {
             loop.execute(() -> {
@@ -366,10 +394,6 @@ public final class CallCoordinator implements AutoCloseable {
             });
         }
         return closed;
-    }
-
-    public void onChatMessage(Consumer<ControlMessage> handler) {
-        chatHandler = Objects.requireNonNull(handler);
     }
 
     @Override

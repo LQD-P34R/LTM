@@ -10,17 +10,22 @@ import java.awt.event.*;
  * gồm nút emoji, ô nhập bo tròn dạng viên thuốc (pill-shape) và nút Gửi hình tròn.
  */
 public final class InputComposer extends JPanel {
-
+    // ===== Dữ liệu và các kiểu hỗ trợ =====
+    // Các trường lưu cấu hình/trạng thái; các kiểu lồng nhau mô tả dữ liệu và hợp đồng dùng trong lớp.
     @FunctionalInterface
     public interface SendListener {
+
+        // ===== Nội dung người dùng muốn gửi =====
+        // Nhận văn bản đã được thanh soạn kiểm tra không rỗng.
         void onSend(String text);
     }
-
     private final UiUtils.RoundedTextField inputField = new UiUtils.RoundedTextField("Nhập tin nhắn...", UiUtils.ARC_XL);
     private final JButton btnEmoji = new JButton(UiIcon.SMILE); // 🙂
     private final SendListener sendListener;
     private JButton sendButton;
 
+    // ===== Khởi tạo và dựng thanh soạn tin =====
+    // Tạo nút emoji, ô nhập và nút gửi; nối sự kiện nhập với xử lý gửi.
     public InputComposer(SendListener listener) {
         this.sendListener = listener;
 
@@ -37,7 +42,6 @@ public final class InputComposer extends JPanel {
         add(sendButton, BorderLayout.EAST);
     }
 
-    // ── Emoji button ──────────────────────────────────────────────
     private JButton buildEmojiButton() {
         btnEmoji.setMargin(new Insets(0,0,0,0));
         btnEmoji.setFont(new Font("Segoe UI", Font.PLAIN, 20));
@@ -93,7 +97,6 @@ public final class InputComposer extends JPanel {
         return btnEmoji;
     }
 
-    // ── Pill-shape Input field ────────────────────────────────────
     private JTextField buildInputField() {
         inputField.setFont(UiUtils.F_BODY);
         inputField.setBgColor(UiUtils.C_SIDEBAR_LIGHT);
@@ -102,7 +105,6 @@ public final class InputComposer extends JPanel {
         return inputField;
     }
 
-    // ── Circular Send button (Nút gửi hình tròn) ──────────────────
     private JButton buildSendButton() {
         JButton btnSend = new JButton() {
             private boolean isHover = false;
@@ -137,6 +139,8 @@ public final class InputComposer extends JPanel {
         return btnSend;
     }
 
+    // ===== Xử lý gửi và chèn nội dung =====
+    // Bỏ qua tin rỗng/ô bị khóa, gọi listener khi gửi và chèn emoji tại vị trí con trỏ.
     private void handleSend() {
         if (!inputField.isEnabled()) return;
         String text = inputField.getText().trim();
@@ -148,12 +152,6 @@ public final class InputComposer extends JPanel {
         inputField.requestFocusInWindow();
     }
 
-    public void setInputEnabled(boolean enabled) {
-        inputField.setEnabled(enabled);
-        btnEmoji.setEnabled(enabled);
-        sendButton.setEnabled(enabled);
-    }
-
     private void insertAtCaret(String str) {
         int pos = inputField.getCaretPosition();
         String current = inputField.getText();
@@ -162,12 +160,16 @@ public final class InputComposer extends JPanel {
         inputField.setCaretPosition(pos + str.length());
     }
 
-    public void requestInputFocus() {
-        inputField.requestFocusInWindow();
+    // ===== Điều khiển ô nhập và bản nháp =====
+    // Bật/tắt nhập, đặt focus và đọc/ghi/xóa nội dung từ khung chat.
+    public void setInputEnabled(boolean enabled) {
+        inputField.setEnabled(enabled);
+        btnEmoji.setEnabled(enabled);
+        sendButton.setEnabled(enabled);
     }
 
-    public void clear() {
-        inputField.setText("");
+    public void requestInputFocus() {
+        inputField.requestFocusInWindow();
     }
 
     public String getText() {
@@ -176,5 +178,9 @@ public final class InputComposer extends JPanel {
 
     public void setText(String text) {
         inputField.setText(text != null ? text : "");
+    }
+
+    public void clear() {
+        inputField.setText("");
     }
 }

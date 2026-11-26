@@ -16,32 +16,32 @@ import java.awt.event.*;
  * </p>
  */
 public final class CallPanel extends JPanel {
-
+    // ===== Dữ liệu và các kiểu hỗ trợ =====
+    // Các trường lưu cấu hình/trạng thái; các kiểu lồng nhau mô tả dữ liệu và hợp đồng dùng trong lớp.
     public enum CallState {
         IDLE, RINGING, IN_CALL
     }
-
     public interface CallListener {
+
+        // ===== Sự kiện nút điều khiển gọi =====
+        // Giao diện báo thao tác hủy, kết thúc hoặc đổi mute để lớp điều phối xử lý.
         void onCallCancelled();
 
         void onCallEnded();
 
         void onMuteToggled(boolean muted);
     }
-
     private final CallListener listener;
     private CallState state = CallState.IDLE;
     private boolean isMuted = false;
     private int callSecs = 0;
     private String currentPeerName = "";
     private javax.swing.Timer callTimer;
-
     // Center elements
     private final UiUtils.AvatarBadge avatarBadge = new UiUtils.AvatarBadge("", 96, false, true, false);
     private final JLabel titleLbl = new JLabel("", SwingConstants.CENTER);
     private final JLabel subLbl = new JLabel("", SwingConstants.CENTER);
     private final JLabel timerLbl = new JLabel("00:00", SwingConstants.CENTER);
-
     // Floating Control buttons
     private final JButton btnMute = createCircularBtn("\uD83C\uDFA4", "Tắt/Bật mic", UiUtils.C_SIDEBAR_LIGHT,
             UiUtils.C_TEXT_PRIMARY); // 🎤
@@ -50,10 +50,11 @@ public final class CallPanel extends JPanel {
     private final JButton btnEnd = createCircularBtn("\uD83D\uDCF5", "Kết thúc cuộc gọi", UiUtils.C_DANGER,
             Color.WHITE); // 📵
     private final JButton btnCancel = createCircularBtn("\u2715", "Huỷ gọi", UiUtils.C_DANGER, Color.WHITE); // ✕
-
     private final JPanel floatingBar = new UiUtils.RoundedPanel(
             UiUtils.ARC_XL, UiUtils.C_CARD_BG, UiUtils.C_BORDER, true);
 
+    // ===== Khởi tạo và dựng giao diện gọi =====
+    // Tạo thẻ thông tin người gọi, các nút điều khiển và trạng thái ban đầu.
     public CallPanel(CallListener listener) {
         this.listener = listener;
         setLayout(new BorderLayout());
@@ -158,6 +159,8 @@ public final class CallPanel extends JPanel {
         return btn;
     }
 
+    // ===== Gắn sự kiện thao tác cuộc gọi =====
+    // Chuyển thao tác mute, kết thúc hoặc hủy gọi cho CallListener.
     private void initActions() {
         btnMute.addActionListener(e -> {
             isMuted = !isMuted;
@@ -179,38 +182,14 @@ public final class CallPanel extends JPanel {
         });
     }
 
+    // ===== Cập nhật và đọc trạng thái cuộc gọi =====
+    // Đổi nội dung/nút theo IDLE, RINGING, IN_CALL và đồng bộ trạng thái microphone.
     public void setState(CallState newState, String peerName) {
         if (newState != this.state)
             setMuteState(false);
         this.state = newState;
         this.currentPeerName = peerName != null ? peerName : "";
         applyState(newState, currentPeerName);
-    }
-
-    public void setMuteState(boolean muted) {
-        this.isMuted = muted;
-        if (muted) {
-            btnMute.setBackground(UiUtils.C_WARNING);
-            btnMute.setForeground(Color.WHITE);
-            btnMute.setToolTipText("Bật mic (đang tắt)");
-        } else {
-            btnMute.setBackground(UiUtils.C_SIDEBAR_LIGHT);
-            btnMute.setForeground(UiUtils.C_TEXT_PRIMARY);
-            btnMute.setToolTipText("Tắt mic");
-        }
-        btnMute.repaint();
-    }
-
-    public CallState getState() {
-        return state;
-    }
-
-    public String getCurrentPeerName() {
-        return currentPeerName;
-    }
-
-    public int getCallDurationSeconds() {
-        return callSecs;
     }
 
     private void applyState(CallState s, String name) {
@@ -262,6 +241,34 @@ public final class CallPanel extends JPanel {
         repaint();
     }
 
+    public void setMuteState(boolean muted) {
+        this.isMuted = muted;
+        if (muted) {
+            btnMute.setBackground(UiUtils.C_WARNING);
+            btnMute.setForeground(Color.WHITE);
+            btnMute.setToolTipText("Bật mic (đang tắt)");
+        } else {
+            btnMute.setBackground(UiUtils.C_SIDEBAR_LIGHT);
+            btnMute.setForeground(UiUtils.C_TEXT_PRIMARY);
+            btnMute.setToolTipText("Tắt mic");
+        }
+        btnMute.repaint();
+    }
+
+    public CallState getState() {
+        return state;
+    }
+
+    public String getCurrentPeerName() {
+        return currentPeerName;
+    }
+
+    public int getCallDurationSeconds() {
+        return callSecs;
+    }
+
+    // ===== Đồng hồ cuộc gọi =====
+    // Bắt đầu đếm thời gian khi đang gọi và dừng/reset khi chuyển trạng thái.
     private void startTimer() {
         callSecs = 0;
         callTimer = new javax.swing.Timer(1000, e -> {

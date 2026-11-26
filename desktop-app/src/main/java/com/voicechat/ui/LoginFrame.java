@@ -18,15 +18,14 @@ import java.awt.event.*;
  * </p>
  */
 public final class LoginFrame extends JFrame {
-
+    // ===== Cấu hình và trạng thái =====
+    // Các hằng số và biến được các khối chức năng bên dưới sử dụng.
     private DesktopSession pendingSession;
     private boolean groupConnecting;
     private final JCheckBox waitForPeer = new JCheckBox("Chờ peer kết nối đến");
     private final JCheckBox groupMode = new JCheckBox("Chat nhóm qua máy chủ");
     private final UiUtils.RoundedTextField tfLocalTcp = new UiUtils.RoundedTextField("Cổng TCP của máy này");
     private final UiUtils.RoundedTextField tfLocalUdp = new UiUtils.RoundedTextField("Cổng UDP của máy này");
-
-    // ── Widgets ───────────────────────────────────────────────────
     private final UiUtils.RoundedTextField tfUsername = new UiUtils.RoundedTextField("Nhập tên người dùng...");
     private final UiUtils.RoundedTextField tfIp = new UiUtils.RoundedTextField("Ví dụ: 127.0.0.1");
     private final UiUtils.RoundedTextField tfPort = new UiUtils.RoundedTextField("Mặc định: 5000");
@@ -35,6 +34,8 @@ public final class LoginFrame extends JFrame {
     private final JProgressBar progress = new JProgressBar();
     private final JLabel lblError = new JLabel(" ");
 
+    // ===== Khởi tạo và dựng biểu mẫu đăng nhập =====
+    // Tạo thẻ đăng nhập, các ô cấu hình kết nối và gắn sự kiện cho biểu mẫu.
     public LoginFrame() {
         super("VoiceLink P2P — Đăng nhập");
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
@@ -73,7 +74,6 @@ public final class LoginFrame extends JFrame {
         btnConnect.addActionListener(connectAction);
     }
 
-    // ── Thẻ Card đăng nhập trung tâm ──────────────────────────────
     private JPanel buildLoginCard() {
         UiUtils.RoundedPanel card = new UiUtils.RoundedPanel(
                 UiUtils.ARC_LG, UiUtils.C_CARD_BG, UiUtils.C_BORDER, true);
@@ -206,7 +206,8 @@ public final class LoginFrame extends JFrame {
         return group;
     }
 
-    // ── Logic kết nối ─────────────────────────────────────────────
+    // ===== Kiểm tra cấu hình và mở kết nối =====
+    // Kiểm tra tên/địa chỉ/cổng; mở phiên P2P hoặc đăng nhập máy chủ nhóm trên luồng nền.
     private void attemptConnect() {
         if (pendingSession != null || groupConnecting) {
             return;
@@ -283,6 +284,17 @@ public final class LoginFrame extends JFrame {
         }
     }
 
+    private int readPort(JTextField field, String label) {
+        try {
+            int port = Integer.parseInt(field.getText().trim());
+            if (port < 1 || port > 65535)
+                throw new NumberFormatException();
+            return port;
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(label + " phải từ 1 đến 65535.");
+        }
+    }
+
     private void connectGroup(String username, String host, int port) {
         groupConnecting = true;
         setFormEnabled(false);
@@ -338,17 +350,8 @@ public final class LoginFrame extends JFrame {
         }.execute();
     }
 
-    private int readPort(JTextField field, String label) {
-        try {
-            int port = Integer.parseInt(field.getText().trim());
-            if (port < 1 || port > 65535)
-                throw new NumberFormatException();
-            return port;
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException(label + " phải từ 1 đến 65535.");
-        }
-    }
-
+    // ===== Cập nhật trạng thái biểu mẫu =====
+    // Bật/tắt các ô theo chế độ kết nối và hiển thị thông báo lỗi.
     private void updatePeerFields() {
         boolean enabled = btnConnect.isEnabled();
         boolean group = groupMode.isSelected();

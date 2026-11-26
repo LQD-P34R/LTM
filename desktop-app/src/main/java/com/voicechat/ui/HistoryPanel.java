@@ -17,13 +17,12 @@ import java.util.List;
  * loại bỏ hoàn toàn các đường kẻ lưới thô cứng mặc định của JTable.
  */
 public final class HistoryPanel extends JPanel {
-
+    // ===== Cấu hình và trạng thái =====
+    // Các hằng số và biến được các khối chức năng bên dưới sử dụng.
     private static final DateTimeFormatter DT_FMT =
             DateTimeFormatter.ofPattern("dd/MM  HH:mm").withZone(ZoneId.systemDefault());
-
     private static final String[] COLUMNS =
             {"Thời gian", "Người gửi", "Phòng / Peer", "Nội dung"};
-
     private final DefaultTableModel tableModel = new DefaultTableModel(COLUMNS, 0) {
         @Override public boolean isCellEditable(int r, int c) { return false; }
     };
@@ -31,6 +30,8 @@ public final class HistoryPanel extends JPanel {
     private final JLabel countLbl = new JLabel("0 tin nhắn");
     private List<ChatMessage> allMessages = new ArrayList<>();
 
+    // ===== Khởi tạo giao diện lịch sử =====
+    // Dựng tiêu đề và bảng hiển thị các tin nhắn.
     public HistoryPanel() {
         setLayout(new BorderLayout());
         setBackground(UiUtils.C_APP_BG);
@@ -38,7 +39,6 @@ public final class HistoryPanel extends JPanel {
         add(buildTable(),  BorderLayout.CENTER);
     }
 
-    // ── Header phẳng hiện đại ─────────────────────────────────────
     private JPanel buildHeader() {
         JPanel header = new JPanel(new BorderLayout(14, 0));
         header.setBackground(UiUtils.C_CARD_BG);
@@ -70,7 +70,6 @@ public final class HistoryPanel extends JPanel {
         return header;
     }
 
-    // ── Table phẳng (không viền lưới thô) ─────────────────────────
     private JScrollPane buildTable() {
         table.setFont(UiUtils.F_BODY);
         table.setRowHeight(42);
@@ -126,6 +125,8 @@ public final class HistoryPanel extends JPanel {
         return scroll;
     }
 
+    // ===== Cập nhật bảng lịch sử =====
+    // Nạp danh sách tin, xóa dữ liệu hoặc đọc số dòng đang hiển thị.
     public void loadHistory(List<ChatMessage> messages) {
         this.allMessages = new ArrayList<>(messages);
         tableModel.setRowCount(0);

@@ -12,16 +12,21 @@ import java.awt.event.WindowEvent;
  * loại bỏ hoàn toàn viền và thanh tiêu đề xám thô cứng của JDialog mặc định.
  */
 public final class IncomingCallDialog extends JDialog {
-
+    // ===== Dữ liệu và các kiểu hỗ trợ =====
+    // Các trường lưu cấu hình/trạng thái; các kiểu lồng nhau mô tả dữ liệu và hợp đồng dùng trong lớp.
     public interface ResponseListener {
+
+        // ===== Phản hồi cuộc gọi đến =====
+        // Báo lựa chọn chấp nhận hoặc từ chối cho bên đã mở hộp thoại.
         void onAccepted();
 
         void onRejected();
     }
-
     private final ResponseListener listener;
     private boolean responded;
 
+    // ===== Dựng thông báo cuộc gọi đến =====
+    // Hiển thị tên người gọi cùng nút chấp nhận/từ chối và xử lý đóng cửa sổ.
     public IncomingCallDialog(Frame owner, String callerName, ResponseListener listener) {
         super(owner, "Cuộc gọi đến", true);
         this.listener = listener;
@@ -86,6 +91,8 @@ public final class IncomingCallDialog extends JDialog {
         setContentPane(card);
     }
 
+    // ===== Trả lời cuộc gọi =====
+    // Chỉ gửi một phản hồi qua listener rồi đóng hộp thoại.
     private void respond(boolean accepted) {
         if (responded)
             return;

@@ -24,10 +24,11 @@ import java.util.concurrent.CompletableFuture;
 
 /** Manages TCP control connections and a shared local UDP endpoint. */
 public final class PeerManager implements NetworkGateway {
+    // ===== Dữ liệu và các kiểu hỗ trợ =====
+    // Các trường lưu cấu hình/trạng thái; các kiểu lồng nhau mô tả dữ liệu và hợp đồng dùng trong lớp.
     private static final int HANDSHAKE_TIMEOUT_MS = 3000;
     private static final int HEARTBEAT_INTERVAL_MS = 2000;
     private static final int READ_TIMEOUT_MS = 8000;
-
     private final TcpService tcp = new TcpService();
     private final String localId;
     private final Map<String, Peer> peers = new HashMap<>();
@@ -38,13 +39,17 @@ public final class PeerManager implements NetworkGateway {
     };
     private volatile BiConsumer<String, byte[]> voiceCallback = (id, bytes) -> {
     };
-
     private volatile Consumer<String> peerConnectedCallback = peerId -> {
     };
     private volatile Consumer<String> peerDisconnectedCallback = peerId -> {
     };
     private CompletableFuture<Void> peerEvents = CompletableFuture.completedFuture(null);
+    private record Peer(String id, Socket socket, InetSocketAddress udpAddress,
+            DataOutputStream output, boolean outgoing) {
+    }
 
+    // ===== Khởi tạo và nhận diện máy cục bộ =====
+    // Tạo ID cho máy này và cung cấp ID dùng trong các bản tin mạng.
     public PeerManager() {
         this(UUID.randomUUID().toString());
     }
@@ -60,6 +65,8 @@ public final class PeerManager implements NetworkGateway {
         return localId;
     }
 
+    // ===== Thiết lập kết nối TCP =====
+    // Mở cổng nghe hoặc kết nối chủ động; trao đổi HELLO để biết ID và cổng UDP của peer.
     /** Starts accepting peers. Pass zero for either port to let the OS choose. */
     public synchronized int startListening(int tcpPort, int udpPort) throws IOException {
         if (listener != null) {
@@ -79,6 +86,23 @@ public final class PeerManager implements NetworkGateway {
         listener = server;
         Thread.ofVirtual().name("peer-accept").start(() -> accept(server, transport));
         return server.getLocalPort();
+    }
+
+    @Override
+    public void connect(String host, int tcpPort) throws IOException {
+        UdpService transport;
+        synchronized (this) {
+            transport = ensureUdp(0);
+        }
+        Socket socket = tcp.connectSocket(host, tcpPort);
+        synchronized (this) {
+            if (udp != transport) {
+                TcpService.close(socket);
+                throw new IOException("Disconnected during TCP connect");
+            }
+            connections.add(socket);
+        }
+        establish(socket, transport, true);
     }
 
     private void accept(ServerSocket server, UdpService transport) {
@@ -110,23 +134,6 @@ public final class PeerManager implements NetworkGateway {
                 }
             }
         }
-    }
-
-    @Override
-    public void connect(String host, int tcpPort) throws IOException {
-        UdpService transport;
-        synchronized (this) {
-            transport = ensureUdp(0);
-        }
-        Socket socket = tcp.connectSocket(host, tcpPort);
-        synchronized (this) {
-            if (udp != transport) {
-                TcpService.close(socket);
-                throw new IOException("Disconnected during TCP connect");
-            }
-            connections.add(socket);
-        }
-        establish(socket, transport, true);
     }
 
     private void establish(Socket socket, UdpService transport, boolean outgoing) throws IOException {
@@ -173,6 +180,27 @@ public final class PeerManager implements NetworkGateway {
             if (!established) {
                 release(socket);
             }
+        }
+    }
+
+    // ===== Trao đổi điều khiển qua TCP =====
+    // Gửi/đọc bản tin điều khiển và gửi heartbeat định kỳ để phát hiện mất kết nối.
+    @Override
+    public void sendControl(String peerId, ControlMessage message) throws IOException {
+        Objects.requireNonNull(message);
+        Peer peer;
+        synchronized (this) {
+            peer = requirePeer(peerId);
+        }
+        if (message.type() == ControlMessage.Type.HELLO) {
+            throw new IOException("HELLO is reserved for the TCP handshake");
+        }
+        byte[] frame = TcpService.encodeControl(message);
+        try {
+            TcpService.writeFrame(peer.output, frame);
+        } catch (IOException e) {
+            TcpService.close(peer.socket);
+            throw e;
         }
     }
 
@@ -226,39 +254,8 @@ public final class PeerManager implements NetworkGateway {
         }
     }
 
-    @Override
-    public void sendControl(String peerId, ControlMessage message) throws IOException {
-        Objects.requireNonNull(message);
-        Peer peer;
-        synchronized (this) {
-            peer = requirePeer(peerId);
-        }
-        if (message.type() == ControlMessage.Type.HELLO) {
-            throw new IOException("HELLO is reserved for the TCP handshake");
-        }
-        byte[] frame = TcpService.encodeControl(message);
-        try {
-            TcpService.writeFrame(peer.output, frame);
-        } catch (IOException e) {
-            TcpService.close(peer.socket);
-            throw e;
-        }
-    }
-
-    @Override
-    public synchronized void sendVoice(String peerId, byte[] packet) throws IOException {
-        Peer peer = requirePeer(peerId);
-        udp.send(peer.udpAddress, packet);
-    }
-
-    private Peer requirePeer(String id) throws IOException {
-        Peer peer = peers.get(id);
-        if (peer == null || peer.socket.isClosed()) {
-            throw new IOException("Peer not connected: " + id);
-        }
-        return peer;
-    }
-
+    // ===== Truyền âm thanh qua UDP =====
+    // Dùng chung một socket UDP, xác định peer gửi rồi chuyển gói âm thanh cho callback.
     private UdpService ensureUdp(int port) throws IOException {
         if (udp == null) {
             UdpService transport = new UdpService(port);
@@ -266,6 +263,12 @@ public final class PeerManager implements NetworkGateway {
             Thread.ofVirtual().name("peer-udp").start(() -> receiveVoice(transport));
         }
         return udp;
+    }
+
+    @Override
+    public synchronized void sendVoice(String peerId, byte[] packet) throws IOException {
+        Peer peer = requirePeer(peerId);
+        udp.send(peer.udpAddress, packet);
     }
 
     private void receiveVoice(UdpService transport) {
@@ -298,6 +301,21 @@ public final class PeerManager implements NetworkGateway {
         }
     }
 
+    // ===== Theo dõi peer và đăng ký sự kiện =====
+    // Cung cấp danh sách peer, kiểm tra kết nối và gọi callback theo thứ tự sự kiện.
+    @Override
+    public synchronized Set<String> connectedPeerIds() {
+        return Set.copyOf(peers.keySet());
+    }
+
+    private Peer requirePeer(String id) throws IOException {
+        Peer peer = peers.get(id);
+        if (peer == null || peer.socket.isClosed()) {
+            throw new IOException("Peer not connected: " + id);
+        }
+        return peer;
+    }
+
     @Override
     public void onControlMessage(Consumer<ControlMessage> callback) {
         controlCallback = Objects.requireNonNull(callback);
@@ -306,16 +324,6 @@ public final class PeerManager implements NetworkGateway {
     @Override
     public void onVoicePacket(BiConsumer<String, byte[]> callback) {
         voiceCallback = Objects.requireNonNull(callback);
-    }
-
-    private synchronized void release(Socket socket) {
-        connections.remove(socket);
-        TcpService.close(socket);
-    }
-
-    @Override
-    public synchronized Set<String> connectedPeerIds() {
-        return Set.copyOf(peers.keySet());
     }
 
     @Override
@@ -342,6 +350,13 @@ public final class PeerManager implements NetworkGateway {
         }, task -> Thread.ofVirtual().name("peer-event").start(task));
     }
 
+    // ===== Đóng kết nối và thu hồi tài nguyên =====
+    // Đóng socket TCP/UDP, xóa phiên peer và thông báo ngắt kết nối.
+    private synchronized void release(Socket socket) {
+        connections.remove(socket);
+        TcpService.close(socket);
+    }
+
     @Override
     public synchronized void disconnect() {
         if (listener != null) {
@@ -362,9 +377,5 @@ public final class PeerManager implements NetworkGateway {
         }
 
         peers.clear();
-    }
-
-    private record Peer(String id, Socket socket, InetSocketAddress udpAddress,
-            DataOutputStream output, boolean outgoing) {
     }
 }

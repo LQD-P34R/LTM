@@ -22,13 +22,22 @@ import javax.swing.SwingUtilities;
 
 /** Owns the single TCP callback and routes chat separately from call signalling. */
 public final class AppCoordinator implements AutoCloseable {
+    // ===== Dữ liệu và các kiểu hỗ trợ =====
+    // Các trường lưu cấu hình/trạng thái; các kiểu lồng nhau mô tả dữ liệu và hợp đồng dùng trong lớp.
     public interface View extends CallCoordinator.View {
+
+        // ===== Kết quả gửi và nhận chat =====
+        // Coordinator thông báo tin đến, tin gửi thành công hoặc lý do gửi thất bại trên EDT.
         void onMessageReceived(ChatMessage message);
+
         void onMessageSent(ChatMessage message);
+
         void onMessageSendFailed(String peerId, String text, String reason);
+
+        // ===== Kết quả nạp lịch sử =====
+        // Nhận danh sách tin đã lưu cho một peer; có thể bỏ qua nhờ hàm default.
         default void onChatHistory(String peerId, List<ChatMessage> messages) { }
     }
-
     private final CallCoordinator calls;
     private final ChatService chat;
     private final View view;
@@ -38,6 +47,8 @@ public final class AppCoordinator implements AutoCloseable {
     private final ExecutorService chatLoop = Executors.newSingleThreadExecutor(
             Thread.ofPlatform().name("chat-control").factory());
 
+    // ===== Khởi tạo và phân luồng bản tin =====
+    // Đăng ký một callback TCP chung: chuyển CHAT cho nghiệp vụ chat, tín hiệu gọi cho CallCoordinator.
     public AppCoordinator(NetworkGateway network, VoiceGateway voice, String localId, View view) {
         this(network, voice, localId, view, new HistoryStore() {
             private final Map<String, ChatMessage> messages = new LinkedHashMap<>();
@@ -79,6 +90,8 @@ public final class AppCoordinator implements AutoCloseable {
         return calls;
     }
 
+    // ===== Gửi chat và nạp lịch sử =====
+    // Chạy nghiệp vụ trên chatLoop, chống hiển thị trùng và chuyển kết quả thành mã phòng dùng trong UI.
     public void sendText(String peerId, String text) {
         submit(() -> {
             try {
@@ -109,6 +122,8 @@ public final class AppCoordinator implements AutoCloseable {
                 message.text(), message.sentAt());
     }
 
+    // ===== Điều phối luồng nền và giao diện =====
+    // Xếp tác vụ chat tuần tự; đưa callback giao diện về EDT và bỏ qua khi phiên đang đóng.
     private void submit(Runnable action) {
         if (closing.get()) return;
         try {
@@ -126,6 +141,8 @@ public final class AppCoordinator implements AutoCloseable {
         });
     }
 
+    // ===== Đóng phiên ứng dụng =====
+    // Kết thúc cuộc gọi/kết nối và dừng hàng đợi xử lý chat.
     public CompletableFuture<Void> closeAsync() {
         closing.set(true);
         // Closing sockets also releases a chat send blocked in network I/O.

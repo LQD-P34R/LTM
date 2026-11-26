@@ -6,8 +6,12 @@ import javax.swing.border.EmptyBorder;
 
 /** Màn hình chào mừng trong vùng nội dung của VoiceLink. */
 final class WelcomePanel extends JPanel {
+    // ===== Cấu hình và trạng thái =====
+    // Các hằng số và biến được các khối chức năng bên dưới sử dụng.
     private final JLabel welcomeLabel = new JLabel("", SwingConstants.CENTER);
 
+    // ===== Dựng màn hình chào =====
+    // Tạo phần chào mừng hiển thị khi chưa chọn cuộc trò chuyện.
     WelcomePanel(String username) {
         super(new GridBagLayout());
         setBackground(UiUtils.C_APP_BG);
@@ -58,6 +62,8 @@ final class WelcomePanel extends JPanel {
         add(card);
     }
 
+    // ===== Cập nhật tên người dùng =====
+    // Thay tên hiển thị khi thông tin đăng nhập thay đổi.
     void setUsername(String username) {
         welcomeLabel.setText("Chào mừng, " + username + "!");
     }

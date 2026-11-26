@@ -23,9 +23,14 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class TcpService {
+    // ===== Dữ liệu và các kiểu hỗ trợ =====
+    // Các trường lưu cấu hình/trạng thái; các kiểu lồng nhau mô tả dữ liệu và hợp đồng dùng trong lớp.
     private static final JsonFactory JSON = new JsonFactory().enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
     private static final int MAX_FRAME_SIZE = 512 * 1024;
+    record Hello(String id, int udpPort) {}
 
+    // ===== Mở kết nối TCP =====
+    // Tạo socket máy chủ hoặc máy khách; connectSocket giao quyền quản lý luồng dữ liệu cho bên gọi.
     public ServerSocket startListening(int port) throws IOException {
         ServerSocket server = new ServerSocket(port);
 
@@ -71,6 +76,8 @@ public class TcpService {
         }
     }
 
+    // ===== Đọc chuỗi UTF từ socket =====
+    // Luồng đọc riêng cho startListening/connect; PeerManager dùng giao thức đóng khung bên dưới.
     private void readFromPeer(Socket peer) {
         try (peer; var input = new DataInputStream(peer.getInputStream())) {
             System.out.println("Da ket noi: " + peer.getRemoteSocketAddress());
@@ -86,8 +93,8 @@ public class TcpService {
         }
     }
 
-    record Hello(String id, int udpPort) {}
-
+    // ===== Bắt tay HELLO =====
+    // Trao đổi ID peer và cổng UDP trước khi nhận các bản tin nghiệp vụ.
     static void writeHello(DataOutputStream output, String id, int udpPort) throws IOException {
         writeControl(output, new ControlMessage(ControlMessage.Type.HELLO, id, null, null,
                 "{\"udpPort\":" + udpPort + "}", Instant.now()));
@@ -113,6 +120,8 @@ public class TcpService {
         }
     }
 
+    // ===== Mã hóa và đóng khung bản tin =====
+    // Chuyển ControlMessage thành JSON; ghi độ dài trước nội dung và kiểm tra khung khi đọc.
     static byte[] encodeControl(ControlMessage message) throws IOException {
         if (message.type() == null) {
             throw new IOException("Control message requires a type");
@@ -185,6 +194,8 @@ public class TcpService {
         }
     }
 
+    // ===== Đóng tài nguyên TCP =====
+    // Thu hồi tài nguyên Closeable và ghi nhận lỗi đóng nếu có.
     static void close(Closeable resource) {
         try {
             resource.close();
@@ -192,5 +203,4 @@ public class TcpService {
             System.err.println("TCP close: " + e.getMessage());
         }
     }
-
 }
